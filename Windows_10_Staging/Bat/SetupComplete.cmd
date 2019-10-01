@@ -13,7 +13,7 @@ REM Tune Windows 10 settings
 powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Powershell/Tune_Windows_10_Preferences.ps1') | iex;}"
 
 REM Install Automate agent
-powershell.exe -ExecutionPolicy Bypass -Command "& {$locationID = !REPLACEME; (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Powershell/Update_Drivers_And_OS.ps1') | iex;}"
+powershell.exe -ExecutionPolicy Bypass -Command "& {$locationID = !REPLACEME; (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/Automate_Agent.ps1') | iex;}"
 
 REM Update drivers and OS
 powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Powershell/Update_Drivers_And_OS.ps1') | iex;}"
