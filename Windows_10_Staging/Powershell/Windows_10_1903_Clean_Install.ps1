@@ -62,11 +62,11 @@ Try {
   If ((Get-WmiObject win32_operatingsystem | Select-Object -ExpandProperty osarchitecture) -eq '64-bit') {
     ## This is the size of the 64-bit file once downloaded so we can compare later and make sure it's complete
     $servFile = 4827807744
-    $osVer = 'x64'
+    $osArch = 'x64'
   } Else {
     ## This is the size of the 32-bit file once downloaded so we can compare later and make sure it's complete
     $servFile = 3266728252
-    $osVer = 'x86'
+    $osArch = 'x86'
   }
 } Catch {
   Write-Warning 'Unable to determine OS architecture'
@@ -79,7 +79,7 @@ Try {
 $windowslogs = "$env:windir\LTSvc\packages\OS\Win10-1903-Logs"
 $automate1903URL = 'https://msproduct.download.microsoft.com/pr/SW_DVD9_Win_Pro_10_1903_64BIT_English_Pro_Ent_EDU_N_MLF_X22-02890.ISO?t=9c905a61-dad0-40ae-9e31-7e19c43f5f95&e=1569961126&h=0360326da0bd276f0b9e75b4b1499dffe376544dbb8b9d5cae2ef8f7de27187b'
 $1903Dir = "$env:windir\LTSvc\packages\OS\Win10\1903"
-$1903ISO = "$1903Dir\Pro$osVer.1903.iso"
+$1903ISO = "$1903Dir\Pro$osArch.1903.iso"
 $isoMountURL = "https://drive.google.com/uc?export=download&id=1XpZOQwH6BRwi8FpFZOr4rHlJMDi2HkLb"
 $isoMountExe = "$1903Dir\mountIso.exe"
 $SetupComplete = "$1903Dir\SetupComplete.cmd"
@@ -150,13 +150,20 @@ Try {
     ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
     ## that is. So before we mount the image, grab all CURRENT drive letters
     $curLetters = (Get-PSDrive).Name -match '^[a-z]$'
-    ## Install the portable ISO mount driver
-    cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
-    ## Mount the ISO
-    cmd.exe /c "echo . | $isoMountExe $1903ISO" | Out-Null
+    $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
+    ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
+    If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
+      ## Mount the ISO with powershell
+      Mount-DiskImage $1903ISO
+    } Else {
+      ## Install the portable ISO mount driver
+      cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
+      ## Mount the ISO
+      cmd.exe /c "echo . | $isoMountExe $1903ISO" | Out-Null
+    }
     ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
     ## it will think no new drive letters exist
-    Start-Sleep 5
+    Start-Sleep 10
     ## Now that the ISO is mounted we should have a new drive letter, so grab all drive letters again
     $newLetters = (Get-PSDrive).Name -match '^[a-z]$'
     ## Compare the drive letters from before/after mounting the ISO and figure out which one is new.
