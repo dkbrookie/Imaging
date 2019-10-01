@@ -24,11 +24,12 @@ Function Install-withProgress {
 
 ## Check for an Automate LocaitonID. If this machine has an agent and a LocationID set
 ## we want to make sure to put it back in that location after the win10 image is installed
-$locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
-If (!$locationID) {
+$oldLocationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
+If (!$oldLocationID) {
     Write-Warning 'No LocationID found for this machine, Automate agent not installed'
+    $oldLocationID = 1
 } Else {
-    Write-Output "Automate LocationdID is $locationID"
+    Write-Output "Automate LocationdID is $oldLocationID"
 }
 
 
@@ -92,6 +93,13 @@ If (!(Test-Path $1903Dir)) {
 ## This file contains all of our scripts to run POST install. It's slim right now but the idea is to 
 ## add in app deployments / customizations all in here.
 (New-Object System.Net.WebClient).DownloadFile($SetupCompleteContent,$SetupComplete)
+
+## Here we're adding the agent install script to the file above. We're adding this to the file AFTER it's
+## downloaded because we need to change the locationID to the current locationID of the machine to make
+## sure the agent installs it back to the right client.
+Add-Content -Path $SetupComplete -Value "
+REM Install Automate agent
+powershell.exe -ExecutionPolicy Bypass -Command ""& {`$locationID = $oldLocationID; (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/Automate_Agent.ps1') | iex;}"""
 
 ## Check to see if the ISO file is already present
 $checkISO = Test-Path $1903ISO -PathType Leaf
