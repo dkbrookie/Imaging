@@ -83,21 +83,15 @@ $1903ISO = "$1903Dir\Pro$osVer.1903.iso"
 $isoMountURL = "https://drive.google.com/uc?export=download&id=1XpZOQwH6BRwi8FpFZOr4rHlJMDi2HkLb"
 $isoMountExe = "$1903Dir\mountIso.exe"
 $SetupComplete = "$1903Dir\SetupComplete.cmd"
+$SetupCompleteContent = "https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Bat/SetupComplete.cmd"
 ## Check for the main directory we're going to work from, create it if it doesn't exist
 If (!(Test-Path $1903Dir)) {
   New-Item -Path $1903Dir -ItemType Directory | Out-Null
 }
 
-## This file contains all of our scripts to run POST install. It's slim right now but the idea
-## is to add in app deployments / customizations all in here.
-Set-Content -Path $SetupComplete -Value @'
-@echo off
-
-powershell.exe -ExecutionPolicy Bypass New-Item C:\PostOOBETestSUCCESS.txt -ItemType File
-
-net user Administrator /active:yes
-net user Administrator DummyPass!
-'@
+## This file contains all of our scripts to run POST install. It's slim right now but the idea is to 
+## add in app deployments / customizations all in here.
+(New-Object System.Net.WebClient).DownloadFile($SetupCompleteContent,$SetupComplete)
 
 ## Check to see if the ISO file is already present
 $checkISO = Test-Path $1903ISO -PathType Leaf
