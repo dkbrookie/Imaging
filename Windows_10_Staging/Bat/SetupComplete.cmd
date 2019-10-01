@@ -1,7 +1,5 @@
 @echo off
 
-powershell.exe -ExecutionPolicy Bypass New-Item C:\PostOOBETestSUCCESS.txt -ItemType File
-
 REM Enable the local administrator account
 net user Administrator /active:yes
 net user Administrator Dummy!
