@@ -3,8 +3,8 @@
 powershell.exe -ExecutionPolicy Bypass New-Item C:\PostOOBETestSUCCESS.txt -ItemType File
 
 REM Enable the local administrator account
-net user /add DKB Dummy!
-net localgroup administrators DKB /add
+net user Administrator /active:yes
+net user Administrator Dummy!
 
 REM Run bloatware remover
 powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Powershell/Bloatware_Remover.ps1') | iex;}"
