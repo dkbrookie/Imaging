@@ -13,5 +13,11 @@ powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).D
 REM Install basic apps w/ Ninite
 powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/General_App_Deploy.ps1') | iex;}"
 
+REM Install Adblock Plus for Chrome
+powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/Install_Chrome_Adblock_Plus.ps1') | iex;}"
+
+REM Install Adblock Plus for IE
+powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/Install_IE_Adblock_Plus.ps1') | iex;}"
+
 REM Update drivers and OS
 powershell.exe -ExecutionPolicy Bypass -Command "& {(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Powershell/Update_Drivers_And_OS.ps1') | iex;}"

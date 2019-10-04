@@ -1,6 +1,6 @@
 ## Set the app list that we're going to remove
 $apps = @(
-    # default Windows 10 apps
+    ## default Windows 10 apps
     "Microsoft.3DBuilder"
     "Microsoft.Appconnector"
     "Microsoft.BingFinance"
@@ -29,21 +29,21 @@ $apps = @(
     "Microsoft.YourPhone"
     "Microsoft.ZuneMusic"
     "Microsoft.ZuneVideo"
-    "microsoft.windowscommunicationsapps"
+    "Microsoft.windowscommunicationsapps"
     "Microsoft.MinecraftUWP"
 
-    # non-Microsoft
+    ## Non-Microsoft
     "9E2F88E3.Twitter"
     "Flipboard.Flipboard"
     "ShazamEntertainmentLtd.Shazam"
     "king.com.CandyCrushSaga"
     "ClearChannelRadioDigital.iHeartRadio"
 
-    # apps which cannot be removed using Remove-AppxPackage
+    ## apps which cannot be removed using Remove-AppxPackage, but we don't care since removing these breaks things
+    ## we don't want to break
     #"Microsoft.BioEnrollment"
     #"Microsoft.MicrosoftEdge"
     #"Microsoft.Windows.Cortana"
-    #"Microsoft.WindowsFeedback"
     #"Microsoft.XboxGameCallableUI"
     #"Microsoft.XboxIdentityProvider"
     #"Windows.ContactSupport"
