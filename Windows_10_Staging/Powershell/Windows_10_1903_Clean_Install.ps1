@@ -78,7 +78,7 @@ Try {
 
 #region fileChecks
 $windowslogs = "$env:windir\LTSvc\packages\OS\Win10-1903-Logs"
-$automate1903URL = 'https://msproduct.download.microsoft.com/pr/SW_DVD9_Win_Pro_10_1903_64BIT_English_Pro_Ent_EDU_N_MLF_X22-02890.ISO?t=9c905a61-dad0-40ae-9e31-7e19c43f5f95&e=1569961126&h=0360326da0bd276f0b9e75b4b1499dffe376544dbb8b9d5cae2ef8f7de27187b'
+$automate1903URL = 'https://msproduct.download.microsoft.com/pr/SW_DVD9_Win_Pro_10_1903.1_64BIT_English_Pro_Ent_EDU_N_MLF_X22-14064.ISO?t=7fb415ad-8adc-4866-a19d-050ded1d17c2&e=1570235378&h=23a6f04af6ba1c390618961995f33d3576432e5f9f1e4762b697144b6091759f'
 $1903Dir = "$env:windir\LTSvc\packages\OS\Win10\1903"
 $1903ISO = "$1903Dir\Pro$osArch.1903.iso"
 $isoMountURL = "https://drive.google.com/uc?export=download&id=1XpZOQwH6BRwi8FpFZOr4rHlJMDi2HkLb"
@@ -171,7 +171,7 @@ Try {
         }
         ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
         ## it will think no new drive letters exist
-        Start-Sleep 10
+        Start-Sleep 30
         ## Now that the ISO is mounted we should have a new drive letter, so grab all drive letters again
         $newLetters = (Get-PSDrive).Name -match '^[a-z]$'
         ## Compare the drive letters from before/after mounting the ISO and figure out which one is new.
