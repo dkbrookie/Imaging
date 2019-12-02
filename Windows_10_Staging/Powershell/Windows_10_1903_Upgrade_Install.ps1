@@ -161,8 +161,8 @@ Try {
         $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
         ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
         If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
-            ## Mount the ISO with powershell
-            Mount-DiskImage $1903ISO
+        ## Mount the ISO with powershell
+        Mount-DiskImage $1903ISO
         } Else {
             ## Install the portable ISO mount driver
             cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
@@ -178,7 +178,7 @@ Try {
         ## This will be our drive letter to work from
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
         ## Call setup.exe w/ all of our required install arguments
-        $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /PostOOBE $setupComplete" -PassThru
+        $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /PostOOBE $setupComplete" -PassThru
         ## This is an attempt to show the install status w/ a progress bar for a GUI...it doesn't really work as intended
         ## but it also doesn't break anything so it's just left here for now
         For($i = 0; $i -le 100; $i = ($i + 1) % 100) {
