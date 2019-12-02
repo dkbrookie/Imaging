@@ -38,6 +38,8 @@ $apps = @(
     "ShazamEntertainmentLtd.Shazam"
     "king.com.CandyCrushSaga"
     "ClearChannelRadioDigital.iHeartRadio"
+    "king.com.CandyCrushFriends"
+    "king.com.FarmHeroesSaga"
 
     ## apps which cannot be removed using Remove-AppxPackage, but we don't care since removing these breaks things
     ## we don't want to break
