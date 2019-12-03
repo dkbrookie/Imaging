@@ -12,4 +12,4 @@ Write-Output 'Checking for driver updates...'
 Install-WindowsUpdate -Category Driver -AcceptAll -Install -Verbose
 ## Install all missing windows updates
 Write-Output 'Checking for general Windows updates...'
-Install-WindowsUpdate -AcceptAll -Install -Verbose
+Install-WindowsUpdate -AcceptAll -Install -AutoReboot -Verbose
