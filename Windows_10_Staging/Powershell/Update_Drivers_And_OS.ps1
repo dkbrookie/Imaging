@@ -9,7 +9,7 @@ Import-Module PSWindowsUpdate
 
 ## Install or update all drivers
 Write-Output 'Checking for driver updates...'
-Install-WindowsUpdate -Category Driver -AcceptAll -Verbose
+Install-WindowsUpdate -Category Driver -AcceptAll -Install -Verbose
 ## Install all missing windows updates
 Write-Output 'Checking for general Windows updates...'
-Install-WindowsUpdate -AcceptAll -AutoReboot -Verbose
+Install-WindowsUpdate -AcceptAll -Install -Verbose
