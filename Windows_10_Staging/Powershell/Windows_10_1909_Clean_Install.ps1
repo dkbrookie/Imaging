@@ -67,7 +67,7 @@ If ($spaceAvailable -lt 10) {
 $rbCheck1 = Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -EA 0
 $rbCheck2 = Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA 0
 $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
-If ($rbCheck1 -ne $Null -or $rbCheck2 -ne $Null -or $rbCheck3 -ne $Null){
+If ($rbCheck1 -or $rbCheck2 -or $rbCheck3){
     Write-Output "This system is pending a reboot, unable to proceed. Please restart your computer and try again."
     Break
 } Else {
@@ -172,7 +172,7 @@ Try {
         $localFolder= (Get-Location).path
         ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
         ## that is. So before we mount the image, grab all CURRENT drive letters
-        $curLetters = (Get-PSDrive).Name -match '^[a-z]$'
+        $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
         $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
         ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
         If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
@@ -188,7 +188,7 @@ Try {
         ## it will think no new drive letters exist
         Start-Sleep 30
         ## Now that the ISO is mounted we should have a new drive letter, so grab all drive letters again
-        $newLetters = (Get-PSDrive).Name -match '^[a-z]$'
+        $newLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
         ## Compare the drive letters from before/after mounting the ISO and figure out which one is new.
         ## This will be our drive letter to work from
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
@@ -210,5 +210,12 @@ Try {
     }
 } Catch {
     Write-Warning "Setup ran into an issue while attempting to install the 1909 upgrade."
+    If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
+        ## Mount the ISO with powershell
+        Dismount-DiskImage $1909ISO
+    } Else {
+        ## Mount the ISO
+        cmd.exe /c "echo . | $isoMountExe /unmountall" | Out-Null
+    }
 }
 #endregion download/install
