@@ -78,7 +78,7 @@ If ($rbCheck1 -ne $Null -or $rbCheck2 -ne $Null -or $rbCheck3 -ne $Null){
 Try {
     If ((Get-WmiObject win32_operatingsystem | Select-Object -ExpandProperty osarchitecture) -eq '64-bit') {
         ## This is the size of the 64-bit file once downloaded so we can compare later and make sure it's complete
-        $servFile = 4827807744
+        $servFile = 4269735936
         $osArch = 'x64'
     } Else {
         ## This is the size of the 32-bit file once downloaded so we can compare later and make sure it's complete
@@ -197,13 +197,13 @@ Try {
         ## This is an attempt to show the install status w/ a progress bar for a GUI...it doesn't really work as intended
         ## but it also doesn't break anything so it's just left here for now
         For($i = 0; $i -le 100; $i = ($i + 1) % 100) {
-        Write-Progress -Activity "Installer" -PercentComplete $i -Status "Installing"
-        Start-Sleep -Milliseconds 100
-        If ($process.HasExited) {
-            Write-Progress -Activity "Installer" -Completed
-            Write-Output "Windows 10 Install process complete!"
-            Break
-        }
+            Write-Progress -Activity "Installer" -PercentComplete $i -Status "Installing"
+            Start-Sleep -Milliseconds 100
+            If ($process.HasExited) {
+                Write-Progress -Activity "Installer" -Completed
+                Write-Output "Windows 10 Install process complete!"
+                Break
+            }
         }
     } Else {
         Write-Warning "Could not find a known status of the var Status. Output: $status"
