@@ -67,7 +67,7 @@ If ($spaceAvailable -lt 10) {
 $rbCheck1 = Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -EA 0
 $rbCheck2 = Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA 0
 $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
-If ($rbCheck1 -ne $Null -or $rbCheck2 -ne $Null -or $rbCheck3 -ne $Null){
+If ($rbCheck1 -or $rbCheck2 -or $rbCheck3){
     Write-Output "This system is pending a reboot, unable to proceed. Please restart your computer and try again."
     Break
 } Else {
