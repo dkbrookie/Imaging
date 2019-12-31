@@ -22,6 +22,12 @@ Function Install-withProgress {
 }
 #endregion functions
 
+## Make sure a URL has been defined for the Win10 ISO
+If (!$automate1909URL) {
+    Write-Warning '!ERROR: No ISO URL was defined to download Windows 10 1909. Please define the $automate1909URL variable with a URL to the ISO and then run this again!'
+    Break
+}
+
 ## Check for an Automate LocaitonID. If this machine has an agent and a LocationID set
 ## we want to make sure to put it back in that location after the win10 image is installed
 $oldLocationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
@@ -78,7 +84,6 @@ Try {
 
 #region fileChecks
 $windowslogs = "$env:windir\LTSvc\packages\OS\Win10-1909-Logs"
-$automate1909URL = 'https://msproduct.download.microsoft.com/pr/SW_DVD9_Win_Pro_10_1909.1_64BIT_English_Pro_Ent_EDU_N_MLF_X22-14064.ISO?t=7fb415ad-8adc-4866-a19d-050ded1d17c2&e=1570235378&h=23a6f04af6ba1c390618961995f33d3576432e5f9f1e4762b697144b6091759f'
 $1909Dir = "$env:windir\LTSvc\packages\OS\Win10\1909"
 $1909ISO = "$1909Dir\Pro$osArch.1909.iso"
 $isoMountURL = "https://drive.google.com/uc?export=download&id=1XpZOQwH6BRwi8FpFZOr4rHlJMDi2HkLb"
