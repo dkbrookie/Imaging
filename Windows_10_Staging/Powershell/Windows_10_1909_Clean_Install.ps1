@@ -30,14 +30,24 @@ If (!$automate1909URL) {
 
 ## Check for an Automate LocaitonID. If this machine has an agent and a LocationID set
 ## we want to make sure to put it back in that location after the win10 image is installed
-$oldLocationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
-If (!$oldLocationID) {
-    Write-Warning 'No LocationID found for this machine, Automate agent not installed'
-    $oldLocationID = 1
+If (!$locationID) {
+    $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
+    If (!$locationID) {
+        Write-Warning 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
+        $locationID = 1
+    } Else {
+        Write-Output "Automate LocationdID is $locationID"
+    }
 } Else {
-    Write-Output "Automate LocationdID is $oldLocationID"
+    Write-Output "This machine will be added to LocationID $locationID after the OS install"
 }
 
+## Make sure an Automate server was defined so we know where to download the agent from
+## and where to sign the agent up to after the OS install
+If (!$server) {
+    Write-Warning '!ERROR: No Automate server address was defined in the $server variable. Please define a server (https://automate.yourcompany.com) in the $server variable before calling this script!'
+    Break
+}
 
 #region checkDisk
 ## Check total disk space, make sure there's at least 10GBs free. If there's not then exit. The
@@ -104,7 +114,7 @@ If (!(Test-Path $1909Dir)) {
 ## sure the agent installs it back to the right client.
 Add-Content -Path $SetupComplete -Value "
 REM Install Automate agent
-powershell.exe -ExecutionPolicy Bypass -Command ""& {`$locationID = $oldLocationID; (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/master/Basic_App_Deploy/Powershell/Automate_Agent.ps1') | iex;}"""
+powershell.exe -ExecutionPolicy Bypass -Command ""& { (new-object Net.WebClient).DownloadString('https://bit.ly/LTPoSh') | iex; Install-LTService -Server $server -LocationID $locationID }"""
 
 ## Check to see if the ISO file is already present
 $checkISO = Test-Path $1909ISO -PathType Leaf
