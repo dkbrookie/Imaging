@@ -78,7 +78,7 @@ If ($rbCheck1 -or $rbCheck2 -or $rbCheck3){
 Try {
     If ((Get-WmiObject win32_operatingsystem | Select-Object -ExpandProperty osarchitecture) -eq '64-bit') {
         ## This is the size of the 64-bit file once downloaded so we can compare later and make sure it's complete
-        $servFile = 4269735936
+        $servFile = 5292945408
         $osArch = 'x64'
     } Else {
         ## This is the size of the 32-bit file once downloaded so we can compare later and make sure it's complete
