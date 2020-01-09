@@ -31,7 +31,7 @@ If (!$automate1909URL) {
 ## Check for an Automate LocaitonID. If this machine has an agent and a LocationID set
 ## we want to make sure to put it back in that location after the win10 image is installed
 If (!$locationID) {
-    $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID
+    $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID -EA 0
     If (!$locationID) {
         Write-Warning 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
         $locationID = 1
