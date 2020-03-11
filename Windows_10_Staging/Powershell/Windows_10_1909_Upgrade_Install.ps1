@@ -146,13 +146,14 @@ If ($status -eq 'Download') {
         (New-Object System.Net.WebClient).DownloadFile($automate1909URL,$1909ISO)
         ## Again check the downloaded file size vs the server file size
         If ($servFile -gt (Get-Item $1909ISO).Length) {
-        Write-Warning "The downloaded size of $1909ISO does not match the server version, unable to install Windows 10 1909."
+            Write-Warning "The downloaded size of $1909ISO does not match the server version, unable to install Windows 10 1909."
         } Else {
-        Write-Output "Successfully downloaded the 1909 Windows 10 ISO!"
+            Write-Output "Successfully downloaded the 1909 Windows 10 ISO!"
         $status = 'Install'
         }
     } Catch {
         Write-Warning "Encountered a problem when trying to download the Windows 10 1909 ISO"
+        Break
     }
 }
 
@@ -163,6 +164,7 @@ Try {
     }
 } Catch {
     Write-Warning "Encountered a problem when trying to download the ISO Mount EXE"
+    Break
 }
 
 Try {
