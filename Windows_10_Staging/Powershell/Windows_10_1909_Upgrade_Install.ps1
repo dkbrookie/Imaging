@@ -168,7 +168,7 @@ Try {
 Try {
     ##Install
     If ($status -eq 'Install') {
-        Write-Output "The Windows 10 Clean Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
+        Write-Output "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
         $localFolder= (Get-Location).path
         ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
         ## that is. So before we mount the image, grab all CURRENT drive letters
