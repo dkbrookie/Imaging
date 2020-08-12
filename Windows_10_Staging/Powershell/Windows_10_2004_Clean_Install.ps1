@@ -146,10 +146,11 @@ If ($status -eq 'Download') {
         (New-Object System.Net.WebClient).DownloadFile($automate2004URL,$2004ISO)
         ## Again check the downloaded file size vs the server file size
         If ($servFile -gt (Get-Item $2004ISO).Length) {
-        Write-Warning "The downloaded size of $2004ISO does not match the server version, unable to install Windows 10 2004."
+            Write-Warning "The downloaded size of $2004ISO does not match the server version, unable to install Windows 10 2004."
+            $status = 'Failed'
         } Else {
-        Write-Output "Successfully downloaded the 2004 Windows 10 ISO!"
-        $status = 'Install'
+            Write-Output "Successfully downloaded the 2004 Windows 10 ISO!"
+            $status = 'Install'
         }
     } Catch {
         Write-Warning "Encountered a problem when trying to download the Windows 10 2004 ISO"
@@ -205,6 +206,10 @@ Try {
                 Break
             }
         }
+    } ElseIf ($status -eq 'Failed') {
+        Write-Warning 'Windows 10 Build 2004 install has failed'
+    } ElseIf ($status -eq 'Download') {
+        Write-Warning '$status still equals Downlaod but should have been changed to Install or Failed by this point. Please check the script.'
     } Else {
         Write-Warning "Could not find a known status of the var Status. Output: $status"
     }
