@@ -196,7 +196,7 @@ Try {
         ## This will be our drive letter to work from
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
         ## Call setup.exe w/ all of our required install arguments
-        $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /PostOOBE $setupComplete" -PassThru
+        $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
         ## This is an attempt to show the install status w/ a progress bar for a GUI...it doesn't really work as intended
         ## but it also doesn't break anything so it's just left here for now
         For($i = 0; $i -le 100; $i = ($i + 1) % 100) {
