@@ -1,26 +1,11 @@
-#region functions
-Function Get-Tree($Path,$Include='*') {
-    @(Get-Item $Path -Include $Include -Force) +
-    (Get-ChildItem $Path -Recurse -Include $Include -Force) | Sort PSPath -Descending -Unique
-}
+<#
+########################
+## CW Automate Checks ##
+########################
 
-Function Remove-Tree($Path,$Include='*') {
-    Get-Tree $Path $Include | Remove-Item -Force -Recurse
-}
-
-Function Install-withProgress {
-    $localFolder= (Get-Location).path
-    $process = Start-Process -FilePath "$localFolder\Installer.exe" -ArgumentList "/silent /accepteula" -PassThru
-    For($i = 0; $i -le 100; $i = ($i + 1) % 100) {
-        Write-Progress -Activity "Installer" -PercentComplete $i -Status "Installing"
-        Start-Sleep -Milliseconds 100
-        If ($process.HasExited) {
-            Write-Progress -Activity "Installer" -Completed
-            Break
-        }
-    }
-}
-#endregion functions
+Check for an Automate LocationID. If this machine has an agent and a LocationID set we want to make sure to put 
+it back in that location after the win10 image is installed
+#>
 
 ## Make sure a URL has been defined for the Win10 ISO
 If (!$automate2004URL) {
@@ -28,8 +13,6 @@ If (!$automate2004URL) {
     Break
 }
 
-## Check for an Automate LocaitonID. If this machine has an agent and a LocationID set
-## we want to make sure to put it back in that location after the win10 image is installed
 If (!$locationID) {
     $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID -EA 0
     If (!$locationID) {
@@ -49,32 +32,106 @@ If (!$server) {
     Break
 }
 
-#region checkDisk
-## Check total disk space, make sure there's at least 10GBs free. If there's not then exit. The
-## image is only 4.6GBs but once it starts installing / unpacking things it gets a bit bigger.
-## 10 is more than we need but just playing it safe.
-$spaceAvailable = [math]::round((Get-PSDrive C | Select -ExpandProperty Free) / 1GB,0)
-If ($spaceAvailable -lt 10) {
-    Write-Warning "You only have a total of $spaceAvailable GBs available, this upgrade needs 10GBs or more to complete successfully"
-    Break
+
+<#
+######################
+## Disk Space Check ##
+######################
+
+Check total disk space, make sure there's at least $($diskSpaceNeeded)GBs free. If there's not then run the disk cleanup script to see
+if we can get enough space. The image is only 4.6GBs but once it starts unpacking / installing it gets quite a bit bigger.
+#>
+
+$diskSpaceNeeded = 10
+$spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
+If ($spaceAvailable -lt $diskSpaceNeeded) {
+    Write-Warning "You only have a total of $spaceAvailable GBs available, this upgrade needs $($diskSpaceNeeded)GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
+    ## Run the disk cleanup script
+    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Automate-Public/master/Maintenance/Disk%20Cleanup/Powershell/Disk_Cleanup.ps1') | Invoke-Expression
+    $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
+    If ($spaceAvailable -lt $diskSpaceNeeded) {
+        Write-Warning "After disk cleanup the available space is now $spaceAvailable GBs, still under $($diskSpaceNeeded)GBs. Please manually clear at least $($diskSpaceNeeded)GBs and try this script again."
+        Break
+    }
 }
-#region checkDisk
 
 
-#region checkOSInfo
-## Reboots pending can be stored in multiple places. Check them all, if a reboto is pending, exit
-## the script. The upgrade will fail anyway w/ a reboot pending.
-$rbCheck1 = Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -EA 0
-$rbCheck2 = Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA 0
+<#
+##########################
+## Reboot Pending Check ##
+##########################
+
+Reboots pending can be stored in multiple places. Check them all, if a reboot is pending, start a reboot
+and record that the reboot was started in the LTSvc folder. This is to use to reference after the reboot
+to confirm the reboot occured, then delete the registry keys if they still exist after the reboot. Windows
+and/or apps that requested the reboot frequently fail to remove these keys so it's common to still show
+"reboot pending" even after a successful reboot. Re-running this script to check for the "win10UpgradeReboot.txt"
+file is handled on the CW Automate side, or by just running this script a second time after the reboot.
+
+If a reboot is pending for any of the reasons below, the Windows 10 upgrade will bomb out so it's important
+to handle this issue before attempting the update.
+#>
+
+## We're going to save some logs to $env:windir so just make sure it exists and create it if it doesn't.
+$LTSvc = "$env:windir\LTSvc"
+If (!(Test-Path -Path $LTSvc)) {
+    New-Item -Path $LTSvc -ItemType Directory | Out-Null
+}
+## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible 
+## for an application to make an entry here too.
+$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
+$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
+$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+$rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
+$rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
+## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
+## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
+## aren't running so they can be renamed.
 $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
-If ($rbCheck1 -or $rbCheck2 -or $rbCheck3){
-    Write-Output "This system is pending a reboot, unable to proceed. Please restart your computer and try again."
-    Break
+
+If ($rbCheck1) {
+    $rebootReason += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
+}
+If ($rbCheck2) {
+    $rebootReason += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
+}
+If ($rbCheck3) {
+    $rebootReason += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
+    $fileRenames = ($rbCheck3).PendingFileRenameOperations | Out-String
+    $rebootReason += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
+    $rebootReason += $fileRenames
+    
+}
+If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
+    $rebootComplete = Get-Content -Path "$LTSvc\win10UpgradeReboot.txt" -ErrorAction Ignore
+    If ($rebootComplete -eq 'True') {
+        Write-Output "Verified the reboot has already been peformed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
+        ## Delete reboot pending keys
+        Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
+        Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
+        Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
+        Remove-Item "$LTSvc\win10UpgradeReboot.txt" -Force -ErrorAction Ignore
+        Write-Output "Reboot registry key deletes completed."
+    } Else {
+        Write-Output "This system is pending a reboot. Reboot reason: $rebootReason"
+        Write-Output "Reboot initiated, exiting script, but this script will run again shortly to pick up where this left off if triggered from CW Automate."
+        shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 2004."
+        Set-Content -Path "$LTSvc\win10UpgradeReboot.txt" -Value 'True'
+        Write-Output "!REBOOT INITIATED:"
+        Break
+    }
 } Else {
-    Write-Output "Automation has verified there is no reboot pending"
+    Write-Output "Verified there is no reboot pending"
+    Remove-Item "$LTSvc\win10UpgradeReboot.txt" -Force -ErrorAction Ignore
 }
 
-## Determine if the machine is x86 or x64
+
+<#
+##############
+## OS Check ##
+##############
+#>
+
 Try {
     If ((Get-WmiObject win32_operatingsystem | Select-Object -ExpandProperty osarchitecture) -eq '64-bit') {
         ## This is the size of the 64-bit file once downloaded so we can compare later and make sure it's complete
@@ -89,10 +146,14 @@ Try {
     Write-Warning 'Unable to determine OS architecture'
     Return
 }
-#endregion checkOSInfo
 
 
-#region fileChecks
+<#
+#################
+## File Checks ##
+#################
+#>
+
 $windowslogs = "$env:windir\LTSvc\packages\OS\Win10-2004-Logs"
 $2004Dir = "$env:windir\LTSvc\packages\OS\Win10\2004"
 $2004ISO = "$2004Dir\Pro$osArch.2004.iso"
@@ -123,8 +184,8 @@ If ($checkISO) {
     ## This means the download was interrupted so if we continue the install will fail
     If ($servFile -gt (Get-Item $2004ISO).Length) {
         Remove-Item -Path $2004ISO -Force
-        ## We're setting $status to Download for a step further down so we know we still need the ISO downloaded and it's
-        ## not ready to install yet. You'll see $status set a few times below and it's all for the same reason.
+        ## We're setting $status to Download for a step further down so we know we still need the ISO downloaded 
+        ## and it's not ready to install yet. You'll see $status set a few times below and it's all for the same reason.
         $status = 'Download'
         Write-Output "The existing installation files for the 2004 update were incomplete or corrupt. Deleted existing files and started a new download."
     } Else {
@@ -135,12 +196,17 @@ If ($checkISO) {
     $status = 'Download'
     Write-Output "The required files to install Windows 10 2004 are not present, downloading required files now. This download is 4.6GBs so may take awhile (depending on your connection speed)."
 }
-#endregion fileChecks
 
 
-#region download/install
-## Now we take that $status we set above and figure out if it needs to be downloaded. If $status
-## does -eq Download then run thi section
+<#
+########################
+## Download & Install ##
+########################
+
+Now we take that $status we set above and figure out if it needs to be downloaded. If $status does -eq Download 
+then run this section
+#>
+
 If ($status -eq 'Download') {
     Try {
         (New-Object System.Net.WebClient).DownloadFile($automate2004URL,$2004ISO)
@@ -154,6 +220,7 @@ If ($status -eq 'Download') {
         }
     } Catch {
         Write-Warning "Encountered a problem when trying to download the Windows 10 2004 ISO"
+        Break
     }
 }
 
@@ -164,13 +231,14 @@ Try {
     }
 } Catch {
     Write-Warning "Encountered a problem when trying to download the ISO Mount EXE"
+    Break
 }
 
 Try {
     ##Install
     If ($status -eq 'Install') {
-        Write-Output "The Windows 10 Clean Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
-        $localFolder= (Get-Location).path
+        Write-Output "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation process. It is highly recommended you save all of your open files!"
+        $localFolder = (Get-Location).path
         ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
         ## that is. So before we mount the image, grab all CURRENT drive letters
         $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
@@ -194,18 +262,8 @@ Try {
         ## This will be our drive letter to work from
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
         ## Call setup.exe w/ all of our required install arguments
-        $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
-        ## This is an attempt to show the install status w/ a progress bar for a GUI...it doesn't really work as intended
-        ## but it also doesn't break anything so it's just left here for now
-        For($i = 0; $i -le 100; $i = ($i + 1) % 100) {
-            Write-Progress -Activity "Installer" -PercentComplete $i -Status "Installing"
-            Start-Sleep -Milliseconds 100
-            If ($process.HasExited) {
-                Write-Progress -Activity "Installer" -Completed
-                Write-Output "Windows 10 Install process complete!"
-                Break
-            }
-        }
+        Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
+        Write-Output "Setup.exe executed with the follow arguments: /Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete -PassThru"
     } ElseIf ($status -eq 'Failed') {
         Write-Warning 'Windows 10 Build 2004 install has failed'
     } ElseIf ($status -eq 'Download') {
@@ -223,4 +281,3 @@ Try {
         cmd.exe /c "echo . | $isoMountExe /unmountall" | Out-Null
     }
 }
-#endregion download/install

@@ -38,19 +38,19 @@ If (!$server) {
 ## Disk Space Check ##
 ######################
 
-Check total disk space, make sure there's at least 10GBs free. If there's not then run the disk cleanup script to see
-if we can get enough space. The image is only 4.6GBs but once it starts installing / unpacking things it gets quite a
-bit bigger. 10 GBs is more than we need but just playing it safe.
+Check total disk space, make sure there's at least $($diskSpaceNeeded)GBs free. If there's not then run the disk cleanup script to see
+if we can get enough space. The image is only 4.6GBs but once it starts unpacking / installing it gets quite a bit bigger.
 #>
 
+$diskSpaceNeeded = 10
 $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
-If ($spaceAvailable -lt 10) {
-    Write-Warning "You only have a total of $spaceAvailable GBs available, this upgrade needs 10GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
+If ($spaceAvailable -lt $diskSpaceNeeded) {
+    Write-Warning "You only have a total of $spaceAvailable GBs available, this upgrade needs $($diskSpaceNeeded)GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
     ## Run the disk cleanup script
     (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Automate-Public/master/Maintenance/Disk%20Cleanup/Powershell/Disk_Cleanup.ps1') | Invoke-Expression
     $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
-    If ($spaceAvailable -lt 10) {
-        Write-Warning "After disk cleanup the available space is now $spaceAvailable GBs, still under 10GBs. Please manually clear at least 10GBs and try this script again."
+    If ($spaceAvailable -lt $diskSpaceNeeded) {
+        Write-Warning "After disk cleanup the available space is now $spaceAvailable GBs, still under $($diskSpaceNeeded)GBs. Please manually clear at least $($diskSpaceNeeded)GBs and try this script again."
         Break
     }
 }
@@ -237,7 +237,7 @@ Try {
 Try {
     ##Install
     If ($status -eq 'Install') {
-        Write-Output "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
+        Write-Output "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation process. It is highly recommended you save all of your open files!"
         $localFolder = (Get-Location).path
         ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
         ## that is. So before we mount the image, grab all CURRENT drive letters
@@ -263,6 +263,7 @@ Try {
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
         ## Call setup.exe w/ all of our required install arguments
         Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
+        Write-Output "Setup.exe executed with the follow arguments: /Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete -PassThru"
     } ElseIf ($status -eq 'Failed') {
         Write-Warning 'Windows 10 Build 2004 install has failed'
     } ElseIf ($status -eq 'Download') {
