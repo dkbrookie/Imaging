@@ -122,6 +122,7 @@ If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
     }
 } Else {
     Write-Output "Verified there is no reboot pending"
+    Remove-Item "$LTSvc\win10UpgradeReboot.txt" -Force -ErrorAction Ignore
 }
 
 
