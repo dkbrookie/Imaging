@@ -262,8 +262,8 @@ Try {
         ## This will be our drive letter to work from
         $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
         ## Call setup.exe w/ all of our required install arguments
-        Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
-        Write-Output "Setup.exe executed with the follow arguments: /Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete -PassThru"
+        Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru -Wait
+        Write-Output "Setup.exe executed with the follow arguments: /Auto Clean /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete -PassThru -Wait"
     } ElseIf ($status -eq 'Failed') {
         Write-Warning 'Windows 10 Build 2004 install has failed'
     } ElseIf ($status -eq 'Download') {
