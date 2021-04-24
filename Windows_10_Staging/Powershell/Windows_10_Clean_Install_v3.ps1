@@ -17,7 +17,8 @@ If (!$automateURL) {
 }
 
 If (!$token) {
-    Write-Warning "!ERROR: No token was defined for the Automate agent. This isn't a problem for an upgrade installation, however for all complete machine wipes this WILL be required!"
+    Write-Warning "!ERROR: No token was defined for the Automate agent. This means there will be no agent installed after the  OS upgrade. Please define the $token before starting this script and try again!"
+    Break
 }
 
 If (!$locationID) {
