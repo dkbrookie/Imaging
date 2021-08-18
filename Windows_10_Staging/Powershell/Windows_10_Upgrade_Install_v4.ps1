@@ -7,13 +7,17 @@ Check for an Automate LocationID. If this machine has an agent and a LocationID 
 it back in that location after the win10 image is installed
 #>
 
-## Define build number this script will upgrade you to
-$win10Build = 2009 # AKA 20h2
+# Define build number this script will upgrade you to, should be like '20H2'
+# This should be defined in the calling script
+If (!$win10Build) {
+    Write-Warning "!ERROR: No Windows Build was defined! Please define the `$win10Build variable to something like '20H2' and then run this again!"
+    Return
+}
 
-## Make sure a URL has been defined for the Win10 ISO
-If (!$automateURL) {
-    Write-Warning "!ERROR: No ISO URL was defined to download Windows 10 $win10Build. Please define the $ automateURL variable with a URL to the ISO and then run this again!"
-    Break
+# Make sure a URL has been defined for the Win10 ISO on Enterprise versions
+If (!$automateURL -and ((Get-WindowsEdition -Online).Edition) -eq 'Enterprise') {
+    Write-Warning "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $win10Build. Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    Return
 }
 
 If (!$token) {
@@ -270,7 +274,7 @@ Try {
         ## Call setup.exe w/ all of our required install arguments
         Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
     } ElseIf ($status -eq 'Failed') {
-        Write-Warning 'Windows 10 Build $win10Build install has failed'
+        Write-Warning "Windows 10 Build $win10Build install has failed"
     } ElseIf ($status -eq 'Download') {
         Write-Warning '$status still equals Downlaod but should have been changed to Install or Failed by this point. Please check the script.'
     } Else {
