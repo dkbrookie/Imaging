@@ -7,40 +7,43 @@ Check for an Automate LocationID. If this machine has an agent and a LocationID 
 it back in that location after the win10 image is installed
 #>
 
+$outputLog = $()
+
 # Define build number this script will upgrade you to, should be like '20H2'
 # This should be defined in the calling script
 If (!$win10Build) {
-    Write-Warning "!ERROR: No Windows Build was defined! Please define the `$win10Build variable to something like '20H2' and then run this again!"
+    Write-Output "!ERROR: No Windows Build was defined! Please define the `$win10Build variable to something like '20H2' and then run this again!"
     Return
 }
 
 # Make sure a URL has been defined for the Win10 ISO on Enterprise versions
 If (!$automateURL -and ((Get-WindowsEdition -Online).Edition) -eq 'Enterprise') {
-    Write-Warning "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $win10Build. Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $win10Build. Please define the `$automateURL variable with a URL to the ISO and then run this again!"
     Return
 }
 
 If (!$token) {
-    Write-Warning "!ERROR: No token was defined for the Automate agent. This isn't a problem for an upgrade installation, however for all complete machine wipes this WILL be required!"
+    $outputLog += "!ERROR: No token was defined for the Automate agent. This isn't a problem for an upgrade installation, however for all complete machine wipes this WILL be required!"
 }
 
 If (!$locationID) {
     $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID -EA 0
     If (!$locationID) {
-        Write-Warning 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
+        $outputLog += 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
         $locationID = 1
     } Else {
-        Write-Output "Automate LocationdID is $locationID"
+        $outputLog += "Automate LocationdID is $locationID"
     }
 } Else {
-    Write-Output "This machine will be added to LocationID $locationID after the OS install"
+    $outputLog += "This machine will be added to LocationID $locationID after the OS install"
 }
 
 ## Make sure an Automate server was defined so we know where to download the agent from
 ## and where to sign the agent up to after the OS install
 If (!$server) {
-    Write-Warning '!ERROR: No Automate server address was defined in the $server variable. Please define a server (https://automate.yourcompany.com) in the $server variable before calling this script!'
-    Break
+    $outputLog = '!ERROR: No Automate server address was defined in the $server variable. Please define a server (https://automate.yourcompany.com) in the $server variable before calling this script!' + $outputLog
+    Write-Output $outputLog
+    Return
 }
 
 
@@ -56,13 +59,14 @@ bit bigger. 10 GBs is more than we need but just playing it safe.
 
 $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
 If ($spaceAvailable -lt 10) {
-    Write-Warning "You only have a total of $spaceAvailable GBs available, this upgrade needs 10GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
+    $outputLog += "You only have a total of $spaceAvailable GBs available, this upgrade needs 10GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
     ## Run the disk cleanup script
     (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Automate-Public/master/Maintenance/Disk%20Cleanup/Powershell/Disk_Cleanup.ps1') | Invoke-Expression
     $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
     If ($spaceAvailable -lt 10) {
-        Write-Warning "After disk cleanup the available space is now $spaceAvailable GBs, still under 10GBs. Please manually clear at least 10GBs and try this script again."
-        Break
+        $outputLog += "After disk cleanup the available space is now $spaceAvailable GBs, still under 10GBs. Please manually clear at least 10GBs and try this script again."
+        Write-Output $outputLog
+        Return
     }
 }
 
@@ -116,23 +120,24 @@ If ($rbCheck3) {
 If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
     $rebootComplete = Get-Content -Path "$LTSvc\win10UpgradeReboot.txt" -ErrorAction Ignore
     If ($rebootComplete -eq 'True') {
-        Write-Output "Verified the reboot has already been peformed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
+        $outputLog += "Verified the reboot has already been peformed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
         ## Delete reboot pending keys
         Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
         Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
         Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
         Remove-Item "$LTSvc\win10UpgradeReboot.txt" -Force -ErrorAction Ignore
-        Write-Output "Reboot registry key deletes completed."
+        $outputLog += "Reboot registry key deletes completed."
     } Else {
-        Write-Output "This system is pending a reboot. Reboot reason: $rebootReason"
-        Write-Output "Reboot initiated, exiting script, but this script will run again shortly to pick up where this left off if triggered from CW Automate."
+        $outputLog += "This system is pending a reboot. Reboot reason: $rebootReason"
+        $outputLog += "Reboot initiated, exiting script, but this script will run again shortly to pick up where this left off if triggered from CW Automate."
         shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 $win10Build."
         Set-Content -Path "$LTSvc\win10UpgradeReboot.txt" -Value 'True'
-        Write-Output "!REBOOT INITIATED:"
-        Break
+        $outputLog += "!REBOOT INITIATED:"
+        Write-Output $outputLog
+        Return
     }
 } Else {
-    Write-Output "Verified there is no reboot pending"
+    $outputLog += "Verified there is no reboot pending"
 }
 
 
@@ -153,7 +158,8 @@ Try {
         $osArch = 'x86'
     }
 } Catch {
-    Write-Warning 'Unable to determine OS architecture'
+    $outputLog += 'Unable to determine OS architecture'
+    Write-Output $outputLog
     Return
 }
 
@@ -197,14 +203,14 @@ If ($checkISO) {
         ## We're setting $status to Download for a step further down so we know we still need the ISO downloaded
         ## and it's not ready to install yet. You'll see $status set a few times below and it's all for the same reason.
         $status = 'Download'
-        Write-Output "The existing installation files for the $win10Build update were incomplete or corrupt. Deleted existing files and started a new download."
+        $outputLog += "The existing installation files for the $win10Build update were incomplete or corrupt. Deleted existing files and started a new download."
     } Else {
-        Write-Output "Verified the installation package downloaded successfully!"
+        $outputLog += "Verified the installation package downloaded successfully!"
         $status = 'Install'
     }
 } Else {
     $status = 'Download'
-    Write-Output "The required files to install Windows 10 $win10Build are not present, downloading required files now. This download is 4.6GBs so may take awhile (depending on your connection speed)."
+    $outputLog += "The required files to install Windows 10 $win10Build are not present, downloading required files now. This download is 4.6GBs so may take awhile (depending on your connection speed)."
 }
 
 
@@ -222,15 +228,16 @@ If ($status -eq 'Download') {
         (New-Object System.Net.WebClient).DownloadFile($automateURL,$ISO)
         ## Again check the downloaded file size vs the server file size
         If ($servFile -gt (Get-Item $ISO).Length) {
-            Write-Warning "The downloaded size of $ISO does not match the server version, unable to install Windows 10 $win10Build."
+            $outputLog += "The downloaded size of $ISO does not match the server version, unable to install Windows 10 $win10Build."
             $status = 'Failed'
         } Else {
-            Write-Output "Successfully downloaded the $win10Build Windows 10 ISO!"
+            $outputLog += "Successfully downloaded the $win10Build Windows 10 ISO!"
             $status = 'Install'
         }
     } Catch {
-        Write-Warning "Encountered a problem when trying to download the Windows 10 $win10Build ISO"
-        Break
+        $outputLog += "Encountered a problem when trying to download the Windows 10 $win10Build ISO"
+        Write-Output $outputLog
+        Return
     }
 }
 
@@ -240,14 +247,15 @@ Try {
         (New-Object System.Net.WebClient).DownloadFile($isoMountURL,$isoMountExe)
     }
 } Catch {
-    Write-Warning "Encountered a problem when trying to download the ISO Mount EXE"
-    Break
+    $outputLog += "Encountered a problem when trying to download the ISO Mount EXE"
+    Write-Output $outputLog
+    Return
 }
 
 Try {
     ##Install
     If ($status -eq 'Install') {
-        Write-Output "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
+        $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
         $localFolder = (Get-Location).path
         ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
         ## that is. So before we mount the image, grab all CURRENT drive letters
@@ -274,14 +282,14 @@ Try {
         ## Call setup.exe w/ all of our required install arguments
         Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogs /Telemetry Disable /PostOOBE $setupComplete" -PassThru
     } ElseIf ($status -eq 'Failed') {
-        Write-Warning "Windows 10 Build $win10Build install has failed"
+        $outputLog += "Windows 10 Build $win10Build install has failed"
     } ElseIf ($status -eq 'Download') {
-        Write-Warning '$status still equals Downlaod but should have been changed to Install or Failed by this point. Please check the script.'
+        $outputLog += '$status still equals Downlaod but should have been changed to Install or Failed by this point. Please check the script.'
     } Else {
-        Write-Warning "Could not find a known status of the var Status. Output: $status"
+        $outputLog += "Could not find a known status of the var Status. Output: $status"
     }
 } Catch {
-    Write-Warning "Setup ran into an issue while attempting to install the $win10Build upgrade."
+    $outputLog += "Setup ran into an issue while attempting to install the $win10Build upgrade."
     If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
         ## Mount the ISO with powershell
         Dismount-DiskImage $ISO
