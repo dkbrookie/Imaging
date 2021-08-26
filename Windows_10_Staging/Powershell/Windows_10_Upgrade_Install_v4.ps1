@@ -407,7 +407,7 @@ If (!Get-NecessaryFilesExist) {
     }
 
     If (!(Test-Path -Path $jobIdFilePath)) {
-        $outputLog += 'Could not create JobId file! Cannot continue without JobId file! Removing Transfer and any files.'
+        $outputLog += 'Could not create JobId file! Cannot continue without JobId file! Cancelling transfer and removing any files that were created. Exiting script.'
         Get-BitsTransfer -JobId $newTransfer.JobId | Remove-BitsTransfer
         Remove-UpgradeFiles
         Invoke-Output $outputLog
