@@ -294,7 +294,7 @@ If ($jobIdFileExists) {
         <# Removed probably unnecessary code relating to strange maaayybe potential states here. See bottom of script for removed code if it's necessary. #>
 
         # The transfer could have disappeared in the last step, so check again
-        If ($transfer) {
+        If ($transfer -and $transfer.JobState) {
             # There is an existing transfer...
             Switch ($transfer.JobState) {
                 # ...and that transfer is still transferring
