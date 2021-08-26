@@ -350,7 +350,7 @@ If ($jobIdFileExists) {
             }
         }
     } ElseIf ($isoFileExists) {
-        $outputLog += "Somehow, there is an existing transfer and also an ISO file. This should not have been allowed to occurr. This machine needs manual intervention, or the script needs to be adjusted. Exiting Script."
+        $outputLog += "Somehow, there is an existing transfer and also an ISO file. This should not have been allowed to occurr. This machine needs manual intervention, or the script needs to be adjusted. You should assess the existing ISO either keep it and remove the transfer, or delete it and complete the transfer. Exiting Script."
         Invoke-Output $outputLog
         Return
     } Else {
