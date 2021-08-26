@@ -343,7 +343,7 @@ If ($jobIdFileExists) {
                 }
 
                 Default {
-                    $outputLog += "The transfer job has entered an unexpected state of $($transfer) and the script can't continue. On this machine, check the job with JobId $jobId"
+                    $outputLog += "The transfer job has entered an unexpected state of $($transfer) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script."
                     Invoke-Output $outputLog
                     Return
                 }
