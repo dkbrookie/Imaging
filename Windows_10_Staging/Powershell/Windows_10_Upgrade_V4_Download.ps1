@@ -316,7 +316,16 @@ If ($jobIdFileExists) {
                         $outputLog += (Get-ErrorMessage $_ "Win10 $automateWin10Build successfully finished downloading, but there was an error completing the transfer and saving the file to disk.")
                     }
 
-                    $outputLog += "Win10 $automateWin10Build has finished downloading. Will attempt installation now!"
+                    $outputLog += "Win10 $automateWin10Build has finished downloading! Removing JobId file because it is no longer needed."
+
+                    Try {
+                        Remove-Item -Path $jobIdFilePath -Force
+                    } Catch {
+                        $outputLog += "Could not remove JobId file for some reason..."
+                    }
+
+                    Invoke-Output $outputLog
+                    Return
                 }
 
                 Default {
@@ -326,8 +335,19 @@ If ($jobIdFileExists) {
                 }
             }
         }
-    } ElseIf ($isoFileExists) {
+    } ElseIf ($transfer -and $isoFileExists) {
         $outputLog += "Somehow, there is an existing transfer and also an ISO file. This should not have been allowed to occurr. This machine needs manual intervention, or the script needs to be adjusted. You should assess the existing ISO either keep it and remove the transfer, or delete it and complete the transfer. Exiting Script."
+        Invoke-Output $outputLog
+        Return
+    } ElseIf ($isoFileExists -and $jobIdFileExists) {
+        $outputLog += "Somehow, the ISO finished transferring and the ISO is present, but the JobId file still exists. Going to try removing the jobId file. It should have been removed when the transfer was completed."
+
+        Try {
+            Remove-Item -Path $jobIdFilePath -Force
+        } Catch {
+            $outputLog += "Could not remove JobId file for some reason..."
+        }
+
         Invoke-Output $outputLog
         Return
     } Else {
