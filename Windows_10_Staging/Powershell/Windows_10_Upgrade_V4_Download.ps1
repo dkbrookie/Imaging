@@ -309,6 +309,9 @@ If ($jobIdFileExists) {
 
                 # ...or that transfer has completed
                 'Transferred' {
+                    # Grab the hash before we complete the transfer, just in case we need it. This is our last chance to grab it from the bitstransfer.
+                    $hash = $transfer.Description
+
                     # The transfer has finished, but it must be "completed" before the ISO file exists
                     Try {
                         $transfer | Complete-BitsTransfer
@@ -322,6 +325,27 @@ If ($jobIdFileExists) {
                         Remove-Item -Path $jobIdFilePath -Force
                     } Catch {
                         $outputLog += "Could not remove JobId file for some reason..."
+                    }
+
+                    $outputLog += "Checking hash of ISO file."
+
+                    # If somehow the hash is missing from the description
+                    If (!$hash) {
+                        $hash = Get-Content -Path $hashFilePath
+                    } ElseIf (!$hashFileExists) {
+                        # If the hash exists and the hash file doesn't exist, create the hash file
+                        New-Item -Path $hashFilePath -Value $newTransfer.FileHash -Force | Out-Null
+                    }
+
+                    If (!$hash -and $isEnterprise) {
+                        $hash = $automateIsoHash
+                    }
+
+                    If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
+                        $outputLog += "The hash doesn't match!! This is terrible! Deleting all files and will start over!"
+                        Remove-UpgradeFiles
+                    } Else {
+                        $outputLog += "The hash matches! The file is all good! Exiting Script!"
                     }
 
                     Invoke-Output $outputLog
@@ -340,7 +364,7 @@ If ($jobIdFileExists) {
         Invoke-Output $outputLog
         Return
     } ElseIf ($isoFileExists -and $jobIdFileExists) {
-        $outputLog += "Somehow, the ISO finished transferring and the ISO is present, but the JobId file still exists. Going to try removing the jobId file. It should have been removed when the transfer was completed."
+        $outputLog += "The ISO exists!! All good! Somehow, JobId file still exists. Going to try removing the jobId file. It should have been removed when the transfer was completed."
 
         Try {
             Remove-Item -Path $jobIdFilePath -Force
@@ -416,6 +440,24 @@ If (!(Get-NecessaryFilesExist)) {
     }
 
     # Finished starting up the transfer, can now exit script. Must have all necessary files ready to go before we move on from here.
+    Invoke-Output $outputLog
+    Return
+} Else {
+    $outputLog += "The ISO exists! Checking hash of downloaded file."
+
+    $hash = Get-Content -Path $hashFilePath
+
+    If (!$hash -and $isEnterprise) {
+        $hash = $automateIsoHash
+    }
+
+    If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
+        $outputLog += "The hash doesn't match!! This is terrible! Deleting all files and will start over!"
+        Remove-UpgradeFiles
+    } Else {
+        $outputLog += "The hash matches! The file is all good! Exiting Script!"
+    }
+
     Invoke-Output $outputLog
     Return
 }
