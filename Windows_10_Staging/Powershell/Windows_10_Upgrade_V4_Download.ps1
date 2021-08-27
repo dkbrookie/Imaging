@@ -46,30 +46,6 @@ If ($isEnterprise -and !$automateIsoHash) {
     Return
 }
 
-If (!$token) {
-    $outputLog += "!ERROR: No token was defined for the Automate agent. This isn't a problem for an upgrade installation, however for all complete machine wipes this WILL be required!"
-}
-
-If (!$locationID) {
-    $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID -EA 0
-    If (!$locationID) {
-        $outputLog += 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
-        $locationID = 1
-    } Else {
-        $outputLog += "Automate LocationdID is $locationID"
-    }
-} Else {
-    $outputLog += "This machine will be added to LocationID $locationID after the OS install"
-}
-
-## Make sure an Automate server was defined so we know where to download the agent from
-## and where to sign the agent up to after the OS install
-If (!$server) {
-    $outputLog = '!ERROR: No Automate server address was defined in the $server variable. Please define a server (https://automate.yourcompany.com) in the $server variable before calling this script!' + $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
 <#
 ######################
 ## Define Constants ##
@@ -146,24 +122,15 @@ function Start-FileDownload {
     #>
 
     $transfer = $Null
-    $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB, 0)
 
-    If ($spaceAvailable -lt 10) {
-        $out += "You only have a total of $spaceAvailable GBs available, this upgrade needs 10GBs or more to complete successfully. Starting disk cleanup script to attempt clearing enough space to continue the update..."
+    # Call in Get-IsDiskFull
+    (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 
-        ## Run the disk cleanup script
-        (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Automate-Public/master/Maintenance/Disk%20Cleanup/Powershell/Disk_Cleanup.ps1') | Invoke-Expression
+    $diskCheck = Get-IsDiskFull -MinGb 10
 
-        $spaceAvailable = [math]::round((Get-PSDrive C | Select-Object -ExpandProperty Free) / 1GB,0)
-
-        If ($spaceAvailable -lt 10) {
-            # Disk is still too full :'(
-            $out = "!Error: After disk cleanup the available space is now $spaceAvailable GBs, still under 10GBs. Please manually clear at least 10GBs and try this script again." + $out
-            Return @{
-                Output = $out
-                DiskFull = $True
-            }
-        }
+    If ($diskCheck.DiskFull) {
+        $out += $diskCheck.Output
+        Return $diskCheck
     }
 
     Try {
@@ -193,37 +160,21 @@ function Start-FileDownload {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-# Call in Get-WindowsVersion
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsVersion.ps1') | Invoke-Expression
-$windowsVersion = Get-WindowsVersion
-$osName = $windowsVersion.SimplifiedName
-$orderOfWin10Versions = $windowsVersion.OrderOfWin10Versions
-$version = $windowsVersion.Version
-$currentVersionIndex = $orderOfWin10Versions.IndexOf($version)
-$wantedVersionIndex = $orderOfWin10Versions.IndexOf($automateWin10Build)
+# Call in Get-Win10VersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
-If ($osName -ne 'Windows 10') {
-    $outputLog += "This does not appear to be a Windows 10 machine. This script only supports Windows 10 machines. This is: $osName"
+Try {
+    $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
+} Catch {
+    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
     Invoke-Output $outputLog
     Return
 }
 
-# If the current version is not in the list of win 10 versions, it's not supported
-If ($currentVersionIndex -eq -1) {
-    $outputLog += "Something went wrong determining the current version of windows, it does not appear to be in the list.. Maybe a new version of windows 10? This script supports up to $($orderOfWin10Versions[-1]) This is: $version. If you need to add a new version of windows, edit this: https://github.com/dkbrookie/PowershellFunctions/blob/master/Function.Get-WindowsVersion.ps1"
-    Invoke-Output
-    Return
-}
-
-# If the wanted version is not in the list of win 10 versions, it's not supported
-If ($wantedVersionIndex -eq -1) {
-    $outputLog += "Something went wrong determining the wanted version of windows, it does not appear to be in the supported list.. Maybe a new version of windows 10? This script supports up to $($orderOfWin10Versions[-1]) You requested: $automateWin10Build. If you need to add a new version of windows, edit this: https://github.com/dkbrookie/PowershellFunctions/blob/master/Function.Get-WindowsVersion.ps1"
-    Invoke-Output
-    Return
-}
-
-If ($currentVersionIndex -ge $wantedVersionIndex) {
-    $outputLog += "The current version on this machine, $version, is less than or equal to the requested version, $automateWin10Build, so it doesn't make sense to continue. Exiting Script."
+If ($versionComparison.Result) {
+    $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
+} Else {
+    $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
     Invoke-Output $outputLog
     Return
 }
@@ -250,7 +201,7 @@ $transfer = $Null
 # If a jobId and hash files exists, attempt to get the transfer
 If ($jobIdFileExists) {
     $jobId = Get-Content -Path $jobIdFilePath
-    $transfer = Get-BitsTransfer -JobId $jobId
+    $transfer = Get-BitsTransfer -JobId $jobId -EA 0
 
     # If there is an existing transfer
     If ($transfer -and !$isoFileExists) {
@@ -284,10 +235,10 @@ If ($jobIdFileExists) {
             If (!$hashFileExists) {
                 # The hash file should exist, but just in case it got deleted or something...
                 $outputLog += "For some reason the hash file is missing.. Creating it now."
-                New-Item -Path $hashFilePath -Value $hash
+                New-Item -Path $hashFilePath -Value $hash -Force | Out-Null
             } ElseIf ((Get-Content -Path $hashFilePath) -ne $hash) {
                 # The hash file exists, but the hash in the transfer doesn't match the hash in the file. Replace file.
-                New-Item -Path $hashFilePath -Value $hash -Force
+                New-Item -Path $hashFilePath -Value $hash -Force | Out-Null
             }
         }
 
@@ -296,17 +247,33 @@ If ($jobIdFileExists) {
         # The transfer could have disappeared in the last step, so check again
         If ($transfer -and $transfer.JobState) {
             # There is an existing transfer...
-            Switch ($transfer.JobState) {
+            $jobState = $transfer.JobState
+
+            Switch ($jobState) {
                 # ...and that transfer is still transferring
-                ('Transferring' -or 'Queued' -or 'Connecting') {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently $($transfer.JobState). Exiting script."
+                'Transferring' {
+                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Transferring'. Exiting script."
+                    Invoke-Output $outputLog
+                    Return
+                }
+
+                # ...and that transfer is still transferring
+                'Queued' {
+                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Queued'. Exiting script."
+                    Invoke-Output $outputLog
+                    Return
+                }
+
+                # ...and that transfer is still transferring
+                'Connecting' {
+                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Connecting'. Exiting script."
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # Might need to count transient errors and increase priority or transferpolicy after a certain number of errors
                 'TransientError' {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently $($transfer.JobState). This is usually not a problem and it should correct itself. Exiting script."
+                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script."
                     Invoke-Output $outputLog
                     Return
                 }
@@ -316,15 +283,25 @@ If ($jobIdFileExists) {
                     $outputLog += "Win10 $automateWin10Build is still transferring, but the transfer was suspended. Attempting to resume."
 
                     Try {
-                        $transfer | Resume-BitsTransfer -Asynchronous
+                        $transfer | Resume-BitsTransfer -Asynchronous | Out-Null
                     } Catch {
                         $outputLog += Get-ErrorMessage $_ "Could not resume the suspended transfer."
                         Invoke-Output $outputLog
                         Return
                     }
 
-                    If ($transfer.JobState -eq 'Suspended') {
-                        $outputLog += "For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Exiting Script."
+                    $jobState = $transfer.JobState
+
+                    If ($jobState -eq 'Suspended') {
+                        $outputLog += "For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Sometimes it just takes a minute to restart. Exiting Script."
+                        Invoke-Output $outputLog
+                        Return
+                    } ElseIf ($jobState -like '*Error*') {
+                        $outputLog += "The Transfer has entered an error state. The error state is $jobState. Removing transfer and files and starting over."
+                        $transfer | Remove-BitsTransfer | Out-Null
+                        Remove-UpgradeFiles
+                    } Else {
+                        $outputLog += "Successfully resumed transfer. Exiting script."
                         Invoke-Output $outputLog
                         Return
                     }
@@ -343,7 +320,7 @@ If ($jobIdFileExists) {
                 }
 
                 Default {
-                    $outputLog += "The transfer job has entered an unexpected state of $($transfer) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script."
+                    $outputLog += "The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script."
                     Invoke-Output $outputLog
                     Return
                 }
@@ -361,13 +338,13 @@ If ($jobIdFileExists) {
 }
 
 # Files could have been deleted or created in the last step, so check to see if all the necessary files exist for installation. Only need ISO and hash files to continue.
-If (!Get-NecessaryFilesExist) {
+If (!(Get-NecessaryFilesExist)) {
     # Just in case Complete-BitsTransfer takes a minute... It shouldn't, it's just a rename from a .tmp file, but juuust in case since we're about to potentially delete
     # the downloaded ISO!
     Start-Sleep -Seconds 30
 
     # Check again
-    If (!Get-NecessaryFilesExist) {
+    If (!(Get-NecessaryFilesExist)) {
         # We're either missing the ISO or the hash file, and both are needed at this point.
         Remove-UpgradeFiles
     }
@@ -379,7 +356,7 @@ FIRST RUN - INIT DOWNLOAD
 ##########################
 #>
 
-If (!Get-NecessaryFilesExist) {
+If (!(Get-NecessaryFilesExist)) {
     # And if the necessary files don't exist at this point, that means we're probably just starting, and we're in a fresh and clean state!
     $outputLog += "Did not find any existing files. Starting transfer of $automateWin10Build"
     $newTransfer = Start-FileDownload
@@ -400,8 +377,8 @@ If (!Get-NecessaryFilesExist) {
 
     Try {
         $outputLog += 'Creating new files to cache the BitsTransfer JobId and FileHash'
-        New-Item -Path $hashFilePath -Value $newTransfer.FileHash -Force
-        New-Item -Path $jobIdFilePath -Value $NewTransfer.JobId -Force
+        New-Item -Path $hashFilePath -Value $newTransfer.FileHash -Force | Out-Null
+        New-Item -Path $jobIdFilePath -Value $NewTransfer.JobId -Force | Out-Null
     } Catch {
         $outputLog += Get-ErrorMessage $_ 'Experienced an error when attempting to create JobId and FileHash files'
     }
