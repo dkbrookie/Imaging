@@ -278,8 +278,6 @@ powershell.exe -ExecutionPolicy Bypass -Command ""& { (New-Object Net.WebClient)
 #>
 
 Try {
-    ##Install
-    $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
     ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
     ## that is. So before we mount the image, grab all CURRENT drive letters
     $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
@@ -293,6 +291,15 @@ Try {
     ## This will be our drive letter to work from
     $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
     ## Call setup.exe w/ all of our required install arguments
+} Catch {
+    $outputLog += "Could not mount the ISO for some reason. Exiting script."
+    Dismount-DiskImage $isoFilePath
+    Invoke-Output $outputLog
+    Return
+}
+
+Try {
+    $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
     Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable /PostOOBE $setupComplete" -PassThru
 } Catch {
     $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
