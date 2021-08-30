@@ -46,30 +46,6 @@ If ($isEnterprise -and !$automateIsoHash) {
     Return
 }
 
-If (!$token) {
-    $outputLog += "!ERROR: No token was defined for the Automate agent. This isn't a problem for an upgrade installation, however for all complete machine wipes this WILL be required!"
-}
-
-If (!$locationID) {
-    $locationID = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\LabTech\Service" -Name LocationID -EA 0
-    If (!$locationID) {
-        $outputLog += 'No LocationID found for this machine, no Automate agent was installed on this machine. Using the default location ID of 1.'
-        $locationID = 1
-    } Else {
-        $outputLog += "Automate LocationdID is $locationID"
-    }
-} Else {
-    $outputLog += "This machine will be added to LocationID $locationID after the OS install"
-}
-
-## Make sure an Automate server was defined so we know where to download the agent from
-## and where to sign the agent up to after the OS install
-If (!$server) {
-    $outputLog = '!ERROR: No Automate server address was defined in the $server variable. Please define a server (https://automate.yourcompany.com) in the $server variable before calling this script!' + $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
 <#
 ######################
 ## Define Constants ##
