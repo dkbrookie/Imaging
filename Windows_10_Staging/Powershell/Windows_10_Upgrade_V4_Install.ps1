@@ -252,26 +252,6 @@ If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
 }
 
 <#
-#################
-## File Checks ##
-#################
-#>
-
-$SetupComplete = "$downloadDir\SetupComplete.cmd"
-$SetupCompleteContent = "https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Bat/SetupComplete.cmd"
-
-## This file contains all of our scripts to run POST install. It's slim right now but the idea is to
-## add in app deployments / customizations all in here.
-(New-Object System.Net.WebClient).DownloadFile($SetupCompleteContent, $SetupComplete)
-
-## Here we're adding the agent install script to the file above. We're adding this to the file AFTER it's
-## downloaded because we need to change the locationID to the current locationID of the machine to make
-## sure the agent installs it back to the right client.
-Add-Content -Path $SetupComplete -Value "
-REM Install Automate agent
-powershell.exe -ExecutionPolicy Bypass -Command ""& { (New-Object Net.WebClient).DownloadString('https://bit.ly/LTPoSh') | iex; Install-LTService -Server $server -LocationID $locationID -InstallerToken $token }"""
-
-<#
 ########################
 ####### Install ########
 ########################
@@ -300,7 +280,7 @@ Try {
 
 Try {
     $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
-    Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable /PostOOBE $setupComplete" -PassThru
+    Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable" -PassThru
 } Catch {
     $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
     Dismount-DiskImage $isoFilePath
