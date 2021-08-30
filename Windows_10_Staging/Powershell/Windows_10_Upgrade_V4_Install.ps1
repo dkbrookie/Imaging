@@ -99,7 +99,7 @@ function Test-RegistryValue {
 
 function Get-HashCheck {
     param ([string]$Path, [string]$Hash)
-    Return (Get-FileHash -Algorithm SHA256 -Path $Path) -eq $Hash
+    Return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash -eq $Hash
 }
 
 <#
