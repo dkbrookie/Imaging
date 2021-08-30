@@ -79,9 +79,9 @@ If (!$server) {
 $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
-$isoFilePath = "$downloadDir\$isoHash.iso"
-$hashFilePath = "$downloadDir\filehash.txt"
-$jobIdFilePath = "$downloadDir\jobId.txt"
+$isoFilePath = "$downloadDir\$automateWin10Build.iso"
+$regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
+$hashKey = "Hash"
 
 <#
 ######################
@@ -106,22 +106,24 @@ If (!(Test-Path $downloadDir)) {
 ## Helper Functions ##
 ######################
 #>
+function Get-RegistryValue {
+    param([string]$Name)
+    Return Get-ItemPropertyValue -Path $regPath -Name $Name
+}
+
+function Test-RegistryValue {
+    param([string]$Name)
+
+    Try {
+        Return [bool](Get-RegistryValue -Name $Name)
+    } Catch {
+        Return $false
+    }
+}
 
 function Get-HashCheck {
     param ([string]$Path, [string]$Hash)
     Return (Get-FileHash -Algorithm SHA256 -Path $Path) -eq $Hash
-}
-
-function Remove-UpgradeFiles {
-    Remove-Item -Path $isoFilePath -EA 0
-    Remove-Item -Path $hashFilePath -EA 0
-    Remove-Item -Path $jobIdFilePath -EA 0
-}
-
-function Get-NecessaryFilesExist {
-    $hashFileExists = Test-Path -Path $hashFilePath
-    $isoFileExists = Test-Path -Path $isoFilePath
-    Return $hashFileExists -and $isoFileExists
 }
 
 <#
@@ -132,69 +134,50 @@ function Get-NecessaryFilesExist {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-# Call in Get-WindowsVersion
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsVersion.ps1') | Invoke-Expression
-$windowsVersion = Get-WindowsVersion
-$osName = $windowsVersion.SimplifiedName
-$orderOfWin10Versions = $windowsVersion.OrderOfWin10Versions
-$version = $windowsVersion.Version
-$currentVersionIndex = $orderOfWin10Versions.IndexOf($version)
-$wantedVersionIndex = $orderOfWin10Versions.IndexOf($automateWin10Build)
+# Call in Get-Win10VersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
-If ($osName -ne 'Windows 10') {
-    $outputLog += "This does not appear to be a Windows 10 machine. This script only supports Windows 10 machines. This is: $osName"
+Try {
+    $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
+} Catch {
+    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
     Invoke-Output $outputLog
     Return
 }
 
-# If the current version is not in the list of win 10 versions, it's not supported
-If ($currentVersionIndex -eq -1) {
-    $outputLog += "Something went wrong determining the current version of windows, it does not appear to be in the list.. Maybe a new version of windows 10? This script supports up to $($orderOfWin10Versions[-1]) This is: $version. If you need to add a new version of windows, edit this: https://github.com/dkbrookie/PowershellFunctions/blob/master/Function.Get-WindowsVersion.ps1"
-    Invoke-Output
-    Return
-}
-
-# If the wanted version is not in the list of win 10 versions, it's not supported
-If ($wantedVersionIndex -eq -1) {
-    $outputLog += "Something went wrong determining the wanted version of windows, it does not appear to be in the supported list.. Maybe a new version of windows 10? This script supports up to $($orderOfWin10Versions[-1]) You requested: $automateWin10Build. If you need to add a new version of windows, edit this: https://github.com/dkbrookie/PowershellFunctions/blob/master/Function.Get-WindowsVersion.ps1"
-    Invoke-Output
-    Return
-}
-
-If ($currentVersionIndex -ge $wantedVersionIndex) {
-    $outputLog += "The current version on this machine, $version, is less than or equal to the requested version, $automateWin10Build, so it doesn't make sense to continue. Exiting Script."
+If ($versionComparison.Result) {
+    $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
+} Else {
+    $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
     Invoke-Output $outputLog
     Return
 }
 
 <#
-######################
-# Existing Downloads #
-######################
-
-Check for a pending or completed bits transfer.
-If pending and transferred, complete transfer and continue.
-If pending and transferring, exit script.
-If hash check fails, remove files and continue.
-If no existing file or pending download, continue.
+#################
+# Prereq Checks #
+#################
 #>
 
-<# --------------------------------------------------- Step 1 ------------------------------------------------------- #>
-# Determine status of bits-transfer: Start one if doesn't exist, exit if still transferring, resume if suspended, start over if in bad state, continue if completed
-$hashFileExists = Test-Path -Path $hashFilePath
-$isoFileExists = Test-Path -Path $isoFilePath
+# No need to continue if the ISO and hash don't exist
+If (!(Test-Path -Path $isoFilePath)) {
+    $outputLog += "ISO doesn't exist yet.. Still waiting on that. Exiting script."
+    Invoke-Output $outputLog
+    Return
+}
 
-# Files could have been deleted or created in the last step, so check to see if all the necessary files exist for installation. Only need ISO and hash files to continue.
-If (!Get-NecessaryFilesExist) {
-    # Just in case Complete-BitsTransfer takes a minute... It shouldn't, it's just a rename from a .tmp file, but juuust in case since we're about to potentially delete
-    # the downloaded ISO!
-    Start-Sleep -Seconds 30
+If (!(Test-RegistryValue -Name $hashKey)) {
+    $outputLog += "Somehow, the ISO exists, but the hash does not :'(. This should not have occurred. The ISO needs to be removed and redownloaded because there is no way to verify it's integrity. This script only handles installation. Exiting script."
+    Invoke-Output $outputLog
+    Return
+}
 
-    # Check again
-    If (!Get-NecessaryFilesExist) {
-        # We're either missing the ISO or the hash file, and both are needed at this point.
-        Remove-UpgradeFiles
-    }
+$hash = Get-RegistryValue -Name $hashKey
+
+If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
+    $outputLog += "An ISO file exists, but the hash does not match!! The hash must match! This ISO should be deleted and redownloaded. Exiting script."
+    Invoke-Output $outputLog
+    Return
 }
 
 <#
@@ -288,51 +271,11 @@ Add-Content -Path $SetupComplete -Value "
 REM Install Automate agent
 powershell.exe -ExecutionPolicy Bypass -Command ""& { (New-Object Net.WebClient).DownloadString('https://bit.ly/LTPoSh') | iex; Install-LTService -Server $server -LocationID $locationID -InstallerToken $token }"""
 
-## Check to see if the ISO file is already present
-If (Test-Path $isoFilePath -PathType Leaf) {
-    ## If the ISO hash does not match the expected hash, delete the downloaded file and start over.
-    If ($servFile -gt (Get-Item $isoFilePath).Length) {
-        Remove-Item -Path $isoFilePath -Force
-        ## We're setting $status to Download for a step further down so we know we still need the ISO downloaded
-        ## and it's not ready to install yet. You'll see $status set a few times below and it's all for the same reason.
-        $status = 'Download'
-        $outputLog += "The existing installation files for the $automateWin10Build update were incomplete or corrupt. Deleted existing files and started a new download."
-    } Else {
-        $outputLog += "Verified the installation package downloaded successfully!"
-        $status = 'Install'
-    }
-} Else {
-    $status = 'Download'
-    $outputLog += "The required files to install Windows 10 $automateWin10Build are not present, downloading required files now. This download is 4.6GBs so may take awhile (depending on your connection speed)."
-}
-
-
 <#
 ########################
-## Download & Install ##
+####### Install ########
 ########################
-
-Now we take that $status we set above and figure out if it needs to be downloaded. If $status does -eq Download
-then run this section
 #>
-
-If ($status -eq 'Download') {
-    Try {
-
-        ## Again check the downloaded file size vs the server file size
-        # If ($servFile -gt (Get-Item $isoFilePath).Length) {
-        #     $outputLog += "The downloaded size of $isoFilePath does not match the server version, unable to install Windows 10 $automateWin10Build."
-        #     $status = 'Failed'
-        # } Else {
-        #     $outputLog += "Successfully downloaded the $automateWin10Build Windows 10 ISO!"
-        #     $status = 'Install'
-        # }
-    } Catch {
-        $outputLog += "Encountered a problem when trying to download the Windows 10 $automateWin10Build ISO"
-        Write-Output $outputLog
-        Return
-    }
-}
 
 ## If the portable ISO mount EXE doesn't exist then download it
 Try {
@@ -347,40 +290,31 @@ Try {
 
 Try {
     ##Install
-    If ($status -eq 'Install') {
-        $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
-        $localFolder = (Get-Location).path
-        ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
-        ## that is. So before we mount the image, grab all CURRENT drive letters
-        $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
-        $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
-        ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
-        If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
-            ## Mount the ISO with powershell
-            Mount-DiskImage $isoFilePath
-        } Else {
-            ## Install the portable ISO mount driver
-            cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
-            ## Mount the ISO
-            cmd.exe /c "echo . | $isoMountExe $isoFilePath" | Out-Null
-        }
-        ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
-        ## it will think no new drive letters exist
-        Start-Sleep 30
-        ## Now that the ISO is mounted we should have a new drive letter, so grab all drive letters again
-        $newLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
-        ## Compare the drive letters from before/after mounting the ISO and figure out which one is new.
-        ## This will be our drive letter to work from
-        $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
-        ## Call setup.exe w/ all of our required install arguments
-        Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable /PostOOBE $setupComplete" -PassThru
-    } ElseIf ($status -eq 'Failed') {
-        $outputLog += "Windows 10 Build $automateWin10Build install has failed"
-    } ElseIf ($status -eq 'Download') {
-        $outputLog += '$status still equals Downlaod but should have been changed to Install or Failed by this point. Please check the script.'
+    $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
+    ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
+    ## that is. So before we mount the image, grab all CURRENT drive letters
+    $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
+    $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
+    ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
+    If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
+        ## Mount the ISO with powershell
+        Mount-DiskImage $isoFilePath
     } Else {
-        $outputLog += "Could not find a known status of the var Status. Output: $status"
+        ## Install the portable ISO mount driver
+        cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
+        ## Mount the ISO
+        cmd.exe /c "echo . | $isoMountExe $isoFilePath" | Out-Null
     }
+    ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
+    ## it will think no new drive letters exist
+    Start-Sleep 30
+    ## Now that the ISO is mounted we should have a new drive letter, so grab all drive letters again
+    $newLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
+    ## Compare the drive letters from before/after mounting the ISO and figure out which one is new.
+    ## This will be our drive letter to work from
+    $mountedLetter = (Compare-Object -ReferenceObject $curLetters -DifferenceObject $newLetters).InputObject + ':'
+    ## Call setup.exe w/ all of our required install arguments
+    Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable /PostOOBE $setupComplete" -PassThru
 } Catch {
     $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
     If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
@@ -391,80 +325,3 @@ Try {
         cmd.exe /c "echo . | $isoMountExe /unmountall" | Out-Null
     }
 }
-
-
-        <#
-        Commenting this next bit out for now.. It's complex and I don't think it's necessary.. I don't think we'll ever end up in a state where the transfer still exists and
-        the resulting ISO exists simultaneously, due to the way BitsTransfer works. Leaving it here just in case that situation pops up. If this does ever end up in-use,
-        make sure to wrap the switch statement below it in an `If ($skipTransferSwitch) {}`
-
-        Moved to bottom of script and put this in it's place:
-        <# Removed probably unnecessary code relating to strange maaayybe potential states here. See bottom of script for removed code if it's necessary. #>
-        #>
-
-        # Check to make sure there's not an existing ISO. There shouldn't be an existing ISO AND and an ongoing transfer, so we should never hit this, but you never know..
-        # We could have started a transfer with one ISO, and then swapped ISO and hash, then the script runs again and finishes the download but fails to install.
-        # In that case, the ISO would exist but might not match the provided hash. Microsoft has been known to slipstream rollups into existing builds without issuing
-        # a new build ID.
-        # If (!$hash -and $hashFileExists) {
-        #     # Hash is missing from the transfer for some reason. Attempt to get hash from file if it exists.
-        #     $hash = Get-Content -Path $hashFilePath
-        #     $hashCameFromFile = $true
-        # }
-        # If ($isoFileExists) {
-        #     # The iso exists...
-        #     $outputLog += "Somehow, there is an existing transfer job for this download, and also an existing ISO file that this transfer job would replace. Checking ISO hash."
-
-        #     If ($hash -and (Get-HashCheck -Path $isoFilePath -Hash $hash)) {
-        #         # ...and the hash exists, and the hash check matches, iso download is already complete, so we don't need the transfer handling at all
-        #         $skipTransferSwitch = $True
-
-        #         $outputLog += "Win10 $automateWin10Build has already been downloaded and the hash matches! Cancelling transfer!"
-
-        #         Try {
-        #             $transfer | Remove-BitsTransfer
-        #         } Catch {
-        #             $outputLog += (Get-ErrorMessage $_ 'For some reason there was an error when attempting to remove the existing transfer. This transfer may need to be removed manually. Continuing.')
-        #         }
-        #     } ElseIf (!$isEnterprise) {
-        #         # If machine is not an enterprise machine, the hash changes per download link, so we need to be a little more thorough
-        #         If (!$hashCameFromFile) {
-        #             # Hash check came from transfer, not description.. maybe there's a different hash in the file? If that one matches, cancel transfer and use the file
-        #             $hash = Get-Content -Path $hashFilePath
-        #             If ($hash -and (Get-HashCheck -Path $isoFilePath -Hash $hash)) {
-        #                 # The hash exists, and the hash check matches, iso download is already complete, so we don't need the transfer handling at all
-        #                 $outputLog += "Win10 $automateWin10Build has already been downloaded and the hash matches! Cancelling transfer!"
-        #                 $skipTransferSwitch = $True
-
-        #                 Try {
-        #                     $transfer | Remove-BitsTransfer
-        #                 } Catch {
-        #                     $outputLog += (Get-ErrorMessage $_ 'For some reason there was an error when attempting to remove the existing transfer. This transfer may need to be removed manually. Continuing.')
-        #                 }
-        #             } Else {
-
-        #             }
-        #         }
-        #     } Else {
-        #         # ISO exists and machine is Enterprise, so we can be reasonably sure that the hash SHOULD BE the one provided in $automateIsoHash
-        #         $hash = $automateIsoHash
-
-        #         If (Get-HashCheck -Path $isoFilePath -Hash $hash) {
-        #             # The hash exists, and the hash check matches, iso download is already complete, so we don't need the transfer handling at all
-        #             $outputLog += "Win10 $automateWin10Build has already been downloaded and the hash matches! Cancelling transfer!"
-        #             $skipTransferSwitch = $True
-
-        #             Try {
-        #                 $transfer | Remove-BitsTransfer
-        #             } Catch {
-        #                 $outputLog += (Get-ErrorMessage $_ 'For some reason there was an error when attempting to remove the existing transfer. This transfer may need to be removed manually. Continuing.')
-        #             }
-        #         } Else {
-        #             # ISO exists, machine is enterprise, and hash does not match. Remove ISO and leave transfer going. Write new hash to file and to transfer description
-        #             # for easier decision next time.
-        #             Remove-UpgradeFiles
-        #             New-Item -Path $hashFilePath -Value $hash
-        #             Set-BitsTransfer -Description $hash
-        #         }
-        #     }
-        # }
