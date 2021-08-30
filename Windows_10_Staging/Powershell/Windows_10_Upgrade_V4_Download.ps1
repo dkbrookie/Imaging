@@ -55,7 +55,7 @@ If ($isEnterprise -and !$automateIsoHash) {
 $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
-$isoFilePath = "$downloadDir\$isoHash.iso"
+$isoFilePath = "$downloadDir\$automateWin10Build.iso"
 $hashFilePath = "$downloadDir\filehash.txt"
 $jobIdFilePath = "$downloadDir\jobId.txt"
 
@@ -85,7 +85,7 @@ If (!(Test-Path $downloadDir)) {
 
 function Get-HashCheck {
     param ([string]$Path, [string]$Hash)
-    Return (Get-FileHash -Algorithm SHA256 -Path $Path) -eq $Hash
+    Return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash -eq $Hash
 }
 
 function Remove-UpgradeFiles {
