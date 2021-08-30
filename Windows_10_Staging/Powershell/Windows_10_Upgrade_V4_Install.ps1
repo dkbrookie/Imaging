@@ -159,13 +159,14 @@ If ($versionComparison.Result) {
 #################
 #>
 
-# No need to continue if the ISO and hash don't exist
+# No need to continue if the ISO doesn't exist
 If (!(Test-Path -Path $isoFilePath)) {
     $outputLog += "ISO doesn't exist yet.. Still waiting on that. Exiting script."
     Invoke-Output $outputLog
     Return
 }
 
+# No need to continue if the hash doesn't exist
 If (!(Test-RegistryValue -Name $hashKey)) {
     $outputLog += "Somehow, the ISO exists, but the hash does not :'(. This should not have occurred. The ISO needs to be removed and redownloaded because there is no way to verify it's integrity. This script only handles installation. Exiting script."
     Invoke-Output $outputLog
@@ -174,6 +175,7 @@ If (!(Test-RegistryValue -Name $hashKey)) {
 
 $hash = Get-RegistryValue -Name $hashKey
 
+# Definitely don't want to continue if the hash doesn't match
 If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
     $outputLog += "An ISO file exists, but the hash does not match!! The hash must match! This ISO should be deleted and redownloaded. Exiting script."
     Invoke-Output $outputLog
@@ -255,8 +257,6 @@ If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
 #################
 #>
 
-$isoMountURL = "https://drive.google.com/uc?export=download&id=1XpZOQwH6BRwi8FpFZOr4rHlJMDi2HkLb"
-$isoMountExe = "$downloadDir\mountIso.exe"
 $SetupComplete = "$downloadDir\SetupComplete.cmd"
 $SetupCompleteContent = "https://raw.githubusercontent.com/dkbrookie/Imaging/master/Windows_10_Staging/Bat/SetupComplete.cmd"
 
@@ -277,34 +277,13 @@ powershell.exe -ExecutionPolicy Bypass -Command ""& { (New-Object Net.WebClient)
 ########################
 #>
 
-## If the portable ISO mount EXE doesn't exist then download it
-Try {
-    If (!(Test-Path $isoMountExe -PathType Leaf)) {
-        (New-Object System.Net.WebClient).DownloadFile($isoMountURL,$isoMountExe)
-    }
-} Catch {
-    $outputLog += "Encountered a problem when trying to download the ISO Mount EXE"
-    Write-Output $outputLog
-    Return
-}
-
 Try {
     ##Install
     $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
     ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
     ## that is. So before we mount the image, grab all CURRENT drive letters
     $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
-    $osVer = (Get-WmiObject -class Win32_OperatingSystem).Caption
-    ## If the OS is Windows 10 or 8.1 we can mount the ISO native through Powershell
-    If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
-        ## Mount the ISO with powershell
-        Mount-DiskImage $isoFilePath
-    } Else {
-        ## Install the portable ISO mount driver
-        cmd.exe /c "echo . | $isoMountExe /Install" | Out-Null
-        ## Mount the ISO
-        cmd.exe /c "echo . | $isoMountExe $isoFilePath" | Out-Null
-    }
+    Mount-DiskImage $isoFilePath
     ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
     ## it will think no new drive letters exist
     Start-Sleep 30
@@ -317,11 +296,7 @@ Try {
     Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable /PostOOBE $setupComplete" -PassThru
 } Catch {
     $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
-    If ($osVer -like '*10*' -or $osVer -like '*8.1*') {
-        ## Mount the ISO with powershell
-        Dismount-DiskImage $isoFilePath
-    } Else {
-        ## Mount the ISO
-        cmd.exe /c "echo . | $isoMountExe /unmountall" | Out-Null
-    }
+    Dismount-DiskImage $isoFilePath
 }
+
+Invoke-Output $outputLog
