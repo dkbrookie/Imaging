@@ -258,7 +258,7 @@ If ($pendingRebootCheck.Checks.Length) {
     $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
     $outputLog += $pendingRebootCheck.Output
 
-    If ($rebootInitiated -eq $true) {
+    If ($rebootInitiated -and ($rebootInitiated -ge 1)) {
         $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
         ## Delete reboot pending keys
         Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
@@ -271,10 +271,20 @@ If ($pendingRebootCheck.Checks.Length) {
         $pendingRebootCheck = Read-PendingRebootStatus
         If ($pendingRebootCheck.Checks.Length) {
             $outputLog += "Was not able to remove some of the reboot flags. Exiting script. The flags still remaining are: $($pendingRebootCheck.Output)"
+
+            # If the attempted deletion has occurred 3 or more times, it's not working... We should probably try a real reboot again, so set value to 0
+            If ($rebootInitiated -ge 3) {
+                $outputLog += "This has been attempted $rebootInitiated times. Setting the counter back to 0 so that on next script run, a reboot will be attempted again."
+                Write-RegistryValue -Name $rebootInitiatedKey -Value 0
+            } Else {
+                # Increment counter
+                Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
+            }
+
             Invoke-Output $outputLog
             Return
         } Else {
-            Write-RegistryValue -Name $rebootInitiatedKey -Value $false
+            Write-RegistryValue -Name $rebootInitiatedKey -Value 0
             $outputLog += "Reboot flags are now clear. Continuing."
         }
     } Else {
@@ -283,14 +293,14 @@ If ($pendingRebootCheck.Checks.Length) {
         shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 $automateWin10Build."
 
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
-        Write-RegistryValue -Name $rebootInitiatedKey -Value $true
+        Write-RegistryValue -Name $rebootInitiatedKey -Value 1
         $outputLog += "!REBOOT INITIATED:"
         Invoke-Output $outputLog
         Return
     }
 } Else {
     $outputLog += "Verified there is no reboot pending"
-    Write-RegistryValue -Name $rebootInitiatedKey -Value $false
+    Write-RegistryValue -Name $rebootInitiatedKey -Value 0
 }
 
 <#
