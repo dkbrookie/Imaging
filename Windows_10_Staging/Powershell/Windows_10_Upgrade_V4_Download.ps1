@@ -87,7 +87,12 @@ If (!(Test-Path $downloadDir)) {
 
 function Get-RegistryValue {
     param([string]$Name)
-    Return Get-ItemPropertyValue -Path $regPath -Name $Name
+
+    Try {
+        Return Get-ItemPropertyValue -Path $regPath -Name $Name
+    } Catch {
+        Return
+    }
 }
 
 function Remove-RegistryValue {

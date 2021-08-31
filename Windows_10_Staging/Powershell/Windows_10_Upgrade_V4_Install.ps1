@@ -8,7 +8,7 @@ $outputLog = $()
 
 function Invoke-Output {
     param ([string]$output)
-    Write-Output ($output -join '`n')
+    Write-Output ($output -join "`n")
 }
 
 function Get-ErrorMessage {
@@ -58,6 +58,10 @@ $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
 $regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
 $hashKey = "Hash"
+$rebootInitiatedKey = "RebootInitiated"
+$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
+$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
+$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 
 <#
 ######################
@@ -84,7 +88,12 @@ If (!(Test-Path $downloadDir)) {
 #>
 function Get-RegistryValue {
     param([string]$Name)
-    Return Get-ItemPropertyValue -Path $regPath -Name $Name
+
+    Try {
+        Return Get-ItemPropertyValue -Path $regPath -Name $Name
+    } Catch {
+        Return
+    }
 }
 
 function Test-RegistryValue {
@@ -97,9 +106,72 @@ function Test-RegistryValue {
     }
 }
 
+function Write-RegistryValue {
+    param ([string]$Name, [string]$Value)
+    $output = @()
+    $propertyPath = "$regPath\$Name"
+
+    If (!(Test-Path -Path $regPath)) {
+        Try {
+            New-Item -Path $regPath -Force -ErrorAction Stop | Out-Null
+        } Catch {
+            $output += Get-ErrorMessage $_ "Could not create registry key $regPath"
+        }
+    }
+
+    If (Test-RegistryValue -Name $Name) {
+        $output += "A value already exists at $propertyPath. Overwriting value."
+    }
+
+    Try {
+        New-ItemProperty -Path $regPath -Name $Name -Value $Value -Force -ErrorAction Stop | Out-Null
+    } Catch {
+        $output += Get-ErrorMessage $_ "Could not create registry property $propertyPath"
+    }
+
+    Return $output
+}
+
 function Get-HashCheck {
     param ([string]$Path, [string]$Hash)
     Return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash -eq $Hash
+}
+
+function Read-PendingRebootStatus {
+    $out = @()
+    $rebootChecks = $()
+
+     ## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
+    ## for an application to make an entry here too.
+    $rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
+    $rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
+
+    ## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
+    ## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
+    ## aren't running so they can be renamed.
+    $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
+
+    If ($rbCheck1) {
+        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
+        $rebootChecks += $rbCheck1
+    }
+
+    If ($rbCheck2) {
+        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
+        $rebootChecks += $rbCheck2
+    }
+
+    If ($rbCheck3) {
+        $out += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
+        $out += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
+        $out = ($rbCheck3).PendingFileRenameOperations | Out-String
+        $rebootChecks += $rbCheck3
+    }
+
+    Return @{
+        Checks = $rebootChecks
+        Output = ($out -join "`n")
+    }
 }
 
 <#
@@ -179,52 +251,46 @@ $LTSvc = "$env:windir\LTSvc"
 If (!(Test-Path -Path $LTSvc)) {
     New-Item -Path $LTSvc -ItemType Directory | Out-Null
 }
-## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
-## for an application to make an entry here too.
-$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
-$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
-$rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
-$rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
-## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
-## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
-## aren't running so they can be renamed.
-$rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
 
-If ($rbCheck1) {
-    $rebootReason += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
-}
-If ($rbCheck2) {
-    $rebootReason += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
-}
-If ($rbCheck3) {
-    $rebootReason += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
-    $fileRenames = ($rbCheck3).PendingFileRenameOperations | Out-String
-    $rebootReason += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
-    $rebootReason += $fileRenames
+$pendingRebootCheck = Read-PendingRebootStatus
 
-}
-If ($rbCheck1 -or $rbCheck2 -or $rbCheck3) {
-    $rebootComplete = Get-Content -Path "$LTSvc\win10UpgradeReboot.txt" -ErrorAction Ignore
-    If ($rebootComplete -eq 'True') {
-        $outputLog += "Verified the reboot has already been peformed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
+If ($pendingRebootCheck.Checks.Length) {
+    $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
+    $outputLog += $pendingRebootCheck.Output
+
+    If ($rebootInitiated -eq $true) {
+        $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
         ## Delete reboot pending keys
         Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
         Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
         Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
-        Remove-Item "$LTSvc\win10UpgradeReboot.txt" -Force -ErrorAction Ignore
-        $outputLog += "Reboot registry key deletes completed."
+
+        $outputLog += "Reboot registry key deletes completed. Checking one last time to ensure that deleting them worked."
+
+        # Check again for pending reboots
+        $pendingRebootCheck = Read-PendingRebootStatus
+        If ($pendingRebootCheck.Checks.Length) {
+            $outputLog += "Was not able to remove some of the reboot flags. Exiting script. The flags still remaining are: $($pendingRebootCheck.Output)"
+            Invoke-Output $outputLog
+            Return
+        } Else {
+            Write-RegistryValue -Name $rebootInitiatedKey -Value $false
+            $outputLog += "Reboot flags are now clear. Continuing."
+        }
     } Else {
-        $outputLog += "This system is pending a reboot. Reboot reason: $rebootReason"
+        $outputLog += "This system is pending a reboot. Reboot reason: $($pendingRebootCheck.Output)"
         $outputLog += "Reboot initiated, exiting script, but this script will run again shortly to pick up where this left off if triggered from CW Automate."
         shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 $automateWin10Build."
-        Set-Content -Path "$LTSvc\win10UpgradeReboot.txt" -Value 'True'
+
+        # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
+        Write-RegistryValue -Name $rebootInitiatedKey -Value $true
         $outputLog += "!REBOOT INITIATED:"
-        Write-Output $outputLog
+        Invoke-Output $outputLog
         Return
     }
 } Else {
     $outputLog += "Verified there is no reboot pending"
+    Write-RegistryValue -Name $rebootInitiatedKey -Value $false
 }
 
 <#
@@ -237,7 +303,7 @@ Try {
     ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
     ## that is. So before we mount the image, grab all CURRENT drive letters
     $curLetters = (Get-PSDrive | Select-Object Name -ExpandProperty Name) -match '^[a-z]$'
-    Mount-DiskImage $isoFilePath
+    Mount-DiskImage $isoFilePath | Out-Null
     ## Have to sleep it here for a second because the ISO takes a second to mount and if we go too quickly
     ## it will think no new drive letters exist
     Start-Sleep 30
@@ -249,7 +315,7 @@ Try {
     ## Call setup.exe w/ all of our required install arguments
 } Catch {
     $outputLog += "Could not mount the ISO for some reason. Exiting script."
-    Dismount-DiskImage $isoFilePath
+    Dismount-DiskImage $isoFilePath | Out-Null
     Invoke-Output $outputLog
     Return
 }
@@ -259,7 +325,7 @@ Try {
     Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable" -PassThru
 } Catch {
     $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
-    Dismount-DiskImage $isoFilePath
+    Dismount-DiskImage $isoFilePath | Out-Null
 }
 
 Invoke-Output $outputLog
