@@ -231,6 +231,32 @@ If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
 }
 
 <#
+########################
+# Logged in User Check #
+########################
+
+We don't want to run this installation when a user is logged in because we don't have any control over the reboots, so if we don't check,
+this could result in lost work. Communication should go out asking users to leave their machine ON but logged out.
+#>
+
+# Call in Get-LogonStatus
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
+
+$userLogonStatus = Get-LogonStatus
+
+# If userLogonStatus equals 0, there is no user logged in. If it is 1 or 2, there is a user logged in and we shouldn't continue.
+$userIsLoggedOut = $userLogonStatus -eq 0
+
+# We want to continue if no user is logged in, or if $installWithLoggedInUser is set to 1
+If (!$userIsLoggedOut -and !($installWithLoggedInUser -eq 1)) {
+    $outputLog += 'There is currently a user logged in to this machine. Will not continue with installation unless no one is logged in.'
+    Invoke-Output $outputLog
+    Return
+} ElseIf ($installWithLoggedInUser -eq 1) {
+    $outputLog += 'A user is logged in. This machine is configured to go ahead with the installation even if a user is logged in via the $installWithLoggedInUser flag. Continuing.'
+}
+
+<#
 ##########################
 ## Reboot Pending Check ##
 ##########################
@@ -254,13 +280,15 @@ If (!(Test-Path -Path $LTSvc)) {
 
 $pendingRebootCheck = Read-PendingRebootStatus
 
+# If there is a pending reboot flag present on the system
 If ($pendingRebootCheck.Checks.Length) {
     $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
     $outputLog += $pendingRebootCheck.Output
 
+    # When the machine is force rebooted, this registry value is set to 1, if it's equal to or greater than 1, we know the machine has been rebooted
     If ($rebootInitiated -and ($rebootInitiated -ge 1)) {
         $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
-        ## Delete reboot pending keys
+        # If the machine still has reboot flags, just delete the flags because it is likely that Windows failed to remove them
         Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
         Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
         Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
@@ -269,10 +297,11 @@ If ($pendingRebootCheck.Checks.Length) {
 
         # Check again for pending reboots
         $pendingRebootCheck = Read-PendingRebootStatus
+        # If there are still pending reboots at this point, increment the counter so we know how many retries have occurred without another forced reboot
         If ($pendingRebootCheck.Checks.Length) {
             $outputLog += "Was not able to remove some of the reboot flags. Exiting script. The flags still remaining are: $($pendingRebootCheck.Output)"
 
-            # If the attempted deletion has occurred 3 or more times, it's not working... We should probably try a real reboot again, so set value to 0
+            # If the attempted deletion has occurred 3 or more times, deleting the flags is not working... We should probably try a real reboot again, so set value to 0
             If ($rebootInitiated -ge 3) {
                 $outputLog += "This has been attempted $rebootInitiated times. Setting the counter back to 0 so that on next script run, a reboot will be attempted again."
                 Write-RegistryValue -Name $rebootInitiatedKey -Value 0
