@@ -142,10 +142,10 @@ function Get-HashCheck {
 }
 
 function Remove-Upgrade {
-    Remove-Item -Path $isoFilePath -EA 0
-    Remove-ItemProperty -Path $regPath -Name $hashKey -EA 0
-    Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
-    Remove-ItemProperty -Path $regPath -Name $transferCompleteKey -EA 0
+    # Remove-Item -Path $isoFilePath -EA 0
+    # Remove-ItemProperty -Path $regPath -Name $hashKey -EA 0
+    # Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+    # Remove-ItemProperty -Path $regPath -Name $transferCompleteKey -EA 0
 }
 
 function Get-PrequisitesExist {
