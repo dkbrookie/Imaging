@@ -89,7 +89,7 @@ function Get-RegistryValue {
     param([string]$Name)
 
     Try {
-        Return Get-ItemPropertyValue -Path $regPath -Name $Name | Out-Null
+        Return Get-ItemPropertyValue -Path $regPath -Name $Name -ErrorAction Stop | Out-Null
     } Catch {
         Return
     }
