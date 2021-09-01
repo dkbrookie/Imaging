@@ -215,23 +215,23 @@ This script should only execute if this machine is a windows 10 machine that is 
 #>
 
 # Call in Get-Win10VersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
+# (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
-Try {
-    $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
-} Catch {
-    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
-    Invoke-Output $outputLog
-    Return
-}
+# Try {
+#     $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
+# } Catch {
+#     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
+#     Invoke-Output $outputLog
+#     Return
+# }
 
-If ($versionComparison.Result) {
-    $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
-} Else {
-    $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
-    Invoke-Output $outputLog
-    Return
-}
+# If ($versionComparison.Result) {
+#     $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
+# } Else {
+#     $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
+#     Invoke-Output $outputLog
+#     Return
+# }
 
 <#
 ######################
