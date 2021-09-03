@@ -32,17 +32,18 @@ If (!$automateWin10Build) {
     Return
 }
 
+$Is64 = [Environment]::Is64BitOperatingSystem
+
+If (!$Is64) {
+    Write-Output "!ERROR: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $automateWin10Build manually!"
+    Return
+}
+
 $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 
 # Make sure a URL has been defined for the Win10 ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
     Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
-    Return
-}
-
-# Make sure a URL has been defined for the Win10 ISO on Enterprise versions
-If ($isEnterprise -and !$automateIsoHash) {
-    Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO Hash was defined to check the intregrity of the file download. Please define the `$automateIsoHash variable with SHA256 hash for ISO defined in `$automateURL!"
     Return
 }
 
@@ -57,9 +58,32 @@ $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
 $regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
-$hashKey = "Hash"
 $jobIdKey = "JobId"
-$transferCompleteKey = "TransferComplete"
+
+<#
+########################
+## Define File Hashes ##
+########################
+#>
+
+If ($isEnterprise) {
+    $hashArrays = @{
+        '20H2' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
+        '21H1' = @('')
+    }
+} Else {
+    $hashArrays = @{
+        '20H2' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
+        '21H1' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
+    }
+}
+
+$acceptableHashes = $hashArrays[$automateWin10Build]
+
+If (!$acceptableHashes) {
+    Write-Output "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    Return
+}
 
 <#
 ######################
@@ -137,21 +161,14 @@ function Write-RegistryValue {
 }
 
 function Get-HashCheck {
-    param ([string]$Path, [string]$Hash)
-    Return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash -eq $Hash
-}
-
-function Remove-Upgrade {
-    # Remove-Item -Path $isoFilePath -EA 0
-    # Remove-ItemProperty -Path $regPath -Name $hashKey -EA 0
-    # Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
-    # Remove-ItemProperty -Path $regPath -Name $transferCompleteKey -EA 0
+    param ([string]$Path)
+    $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
+    $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
+    Return $hashMatches.length -gt 0
 }
 
 function Get-PrequisitesExist {
-    $hashExists = Test-RegistryValue -Name $hashKey
-    $isoFileExists = Test-Path -Path $isoFilePath
-    Return $hashExists -and $isoFileExists
+    Return Test-Path -Path $isoFilePath
 }
 
 function Start-FileDownload {
@@ -160,13 +177,11 @@ function Start-FileDownload {
     # Get URL
     If ($isEnterprise) {
         $downloadUrl = $automateURL
-        $fileHash = $automateIsoHash
     } Else {
         (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.GetWindowsIsoUrl.ps1') | Invoke-Expression
         $fido = Get-WindowsIsoUrl -Rel $automateWin10Build
 
         $downloadUrl = $fido.Link
-        $fileHash = $fido.FileHash
     }
 
     <#
@@ -188,7 +203,7 @@ function Start-FileDownload {
     }
 
     Try {
-        $transfer = Start-BitsTransfer -Source $downloadUrl -Destination $isoFilePath -TransferPolicy Standard -Asynchronous -Description $fileHash
+        $transfer = Start-BitsTransfer -Source $downloadUrl -Destination $isoFilePath -TransferPolicy Standard -Asynchronous
     } Catch {
         $out += (Get-ErrorMessage $_ "!Error: Could not start the transfer!")
         Return @{
@@ -198,7 +213,6 @@ function Start-FileDownload {
     }
 
     Return @{
-        FileHash = $fileHash
         JobId = $transfer.JobId
         Output = $out
         DiskFull = $False
@@ -214,7 +228,11 @@ function Start-FileDownload {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-# Call in Get-Win10VersionComparison
+
+# TODO: !!!This is only commented out for testing, uncomment this before production!!!
+
+
+## Call in Get-Win10VersionComparison
 # (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
 # Try {
@@ -241,86 +259,20 @@ This script should only execute if this machine is a windows 10 machine that is 
 Check for a pending or completed bits transfer.
 If pending and transferred, complete transfer and continue.
 If pending and transferring, exit script.
-If hash check fails, remove files and continue.
 If no existing file or pending download, continue.
 #>
 
-# Determine status of bits-transfer: Start one if doesn't exist, exit if still transferring, resume if suspended, start over if in bad state, continue if completed
-$transferComplete = $false
-
-# If the TransferComplete registry value exists...
-If (Test-RegistryValue -Name $transferCompleteKey) {
-    # ...and the value matches the requested build
-    If ((Get-RegistryValue -Name $transferCompleteKey) -eq $automateWin10Build) {
-        # ...and the iso exists
-        If (Test-Path -Path $isoFilePath) {
-            # Then the transfer is complete and we can skip the download handling
-            $transferComplete = $true
-        }
-    } Else {
-        # Looks like a previous version of windows was installed with this script. Let's clean that up.
-        $outputLog += "Found a previous win10 upgrade in existence. Deleting previous ISO and also previous registry keys."
-        Try {
-            $oldBuild = Get-RegistryValue -Name $transferCompleteKey
-            Remove-Item -Path "$downloadDir\$oldBuild" -Force | Out-Null
-        } Catch {
-            $outputLog += Get-ErrorMessage $_ "Tried to delete old windows ISO at $downloadDir\$oldBuild but experienced an error."
-        }
-
-        # And clean up the old registry values
-        Remove-RegistryValue -Name $transferCompleteKey
-        Remove-RegistryValue -Name $hashKey
-        Remove-RegistryValue -Name $jobIdKey
-    }
-}
-
+# If a jobId exists in the registry
 $jobIdExists = Test-RegistryValue -Name $jobIdKey
-$hashExists = Test-RegistryValue -Name $hashKey
 
-# If a jobId exists, but the transfer is not complete, attempt to get the transfer
-If ($jobIdExists -and !$transferComplete) {
+# If a jobId exists, but ISO doesn't exist, attempt to get the transfer
+If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
     $jobId = Get-RegistryValue -Name $jobIdKey
     $transfer = Get-BitsTransfer -JobId $jobId -EA 0
 
     # If there is an existing transfer
     If ($transfer) {
         $outputLog += "There is an existing transfer of $automateWin10Build."
-
-        # Prefer the hash in the transfer description
-        $hash = $transfer.Description
-
-        If (!$hash) {
-            # If the transfer doesn't have a hash on it's description somehow...
-            If ($hashExists) {
-                # ...and the hash exists, get it from there
-                $hash = Get-RegistryValue -Name $hashKey
-            } ElseIf ($isEnterprise) {
-                # ...or if the machine is Enterprise, we can probably trust the hash from $automateIsoHash
-                $hash = $automateIsoHash
-            } Else {
-                # Can't get the hash from anywhere.. Can't verify integrity of file... must abort transfer and start over
-                $outputLog += "No hash is available to check the integrity of the file once download. Aborting transfer and starting over."
-
-                Try {
-                    $transfer | Remove-BitsTransfer
-                    # Null out the variable so that the next checks correctly identify that there is no transfer
-                    $transfer = $Null
-                } Catch {
-                    $outputLog += (Get-ErrorMessage $_ 'For some reason there was an error when attempting to remove the existing transfer. This transfer may need to be removed manually. Continuing.')
-                }
-            }
-        } Else {
-            $outputLog += "Successfully retrieved ISO hash."
-
-            If (!$hashExists) {
-                # The hash should exist, but just in case it got deleted or something...
-                $outputLog += "For some reason the hash is missing from the registry.. Creating it now."
-                $outputLog += Write-RegistryValue -Name $hashKey
-            } ElseIf ((Get-RegistryValue -Name $hashKey) -ne $hash) {
-                # The hash exists, but the hash in the transfer doesn't match the hash in the registry. Replace registry value.
-                $outputLog += Write-RegistryValue -Name $hashKey -Value $hash
-            }
-        }
 
         <# Removed probably unnecessary code relating to strange maaayybe potential states here. See bottom of script for removed code if it's necessary. #>
 
@@ -379,7 +331,7 @@ If ($jobIdExists -and !$transferComplete) {
                     } ElseIf ($jobState -like '*Error*') {
                         $outputLog += "The Transfer has entered an error state. The error state is $jobState. Removing transfer and files and starting over."
                         $transfer | Remove-BitsTransfer | Out-Null
-                        Remove-Upgrade
+                        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
                     } Else {
                         $outputLog += "Successfully resumed transfer. Exiting script."
                         Invoke-Output $outputLog
@@ -389,9 +341,6 @@ If ($jobIdExists -and !$transferComplete) {
 
                 # ...or that transfer has completed
                 'Transferred' {
-                    # Grab the hash before we complete the transfer, just in case we need it. This is our last chance to grab it from the bitstransfer.
-                    $hash = $transfer.Description
-
                     # The transfer has finished, but it must be "completed" before the ISO file exists
                     Try {
                         $transfer | Complete-BitsTransfer
@@ -401,31 +350,11 @@ If ($jobIdExists -and !$transferComplete) {
 
                     $outputLog += "Win10 $automateWin10Build has finished downloading!"
 
-                    Try {
-                        Write-RegistryValue -Name $transferCompleteKey -Value $automateWin10Build
-                    } Catch {
-                        $outputLog += "Could not set TransferComplete registry value for some reason..."
-                    }
-
                     $outputLog += "Checking hash of ISO file."
 
-                    # If somehow the hash is missing from the description
-                    If (!$hash) {
-                        $hash = Get-RegistryValue -Name $hashKey
-                    } ElseIf (!$hashExists) {
-                        # If the hash exists and the hash registry value doesn't exist, create the hash registry value
-                        $outputLog += Write-RegistryValue -Name $hashKey -Value $newTransfer.FileHash
-                    }
-
-                    If (!$hash -and $isEnterprise) {
-                        $hash = $automateIsoHash
-                        # Create the hash registry value
-                        $outputLog += Write-RegistryValue -Name $hashKey -Value $hash
-                    }
-
-                    If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
-                        $outputLog += "The hash doesn't match!! This is terrible! Deleting all files and will start over!"
-                        Remove-Upgrade
+                    If (!(Get-HashCheck -Path $isoFilePath)) {
+                        $hash = Get-FileHash -Path $isoFilePath -Algorithm 'SHA256'
+                        $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is ||$hash||"
                     } Else {
                         $outputLog += "The hash matches! The file is all good! Exiting Script!"
                     }
@@ -442,21 +371,15 @@ If ($jobIdExists -and !$transferComplete) {
             }
         }
     } Else {
-
+        $outputLog += "Transfer was started, there is JobId cached, but there is no ISO and there is no existing transfer. The transfer or the ISO must have gotten deleted somehow. Cleaning up and restarting from the beginning."
+        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
     }
 }
 
-# Files could have been deleted or created in the last step, so check to see if all the necessary files exist for installation. Only need ISO and hash files to continue.
-If (!(Get-PrequisitesExist)) {
-    # Just in case Complete-BitsTransfer takes a minute... It shouldn't, it's just a rename from a .tmp file, but juuust in case since we're about to potentially delete
-    # the downloaded ISO!
+# ISO file could have been deleted or created in the last step, so check again.
+If (!(Test-Path -Path $isoFilePath)) {
+    # Just in case Complete-BitsTransfer takes a minute... It shouldn't, it's just a rename from a .tmp file, but juuust in case
     Start-Sleep -Seconds 10
-
-    # Check again
-    If (!(Get-PrequisitesExist)) {
-        # We're missing the ISO and/or the hash file, and both are needed at this point.
-        Remove-Upgrade
-    }
 }
 
 <#
@@ -465,9 +388,12 @@ FIRST RUN - INIT DOWNLOAD
 ##########################
 #>
 
-If (!(Get-PrequisitesExist)) {
-    # If hash and ISO don't exist at this point, we're in a fresh and clean state, and ready to start a transfer.
-    $outputLog += "Did not find any existing files. Starting transfer of $automateWin10Build"
+# If the ISO doesn't exist at this point, let's just start fresh.
+If (!(Test-Path -Path $isoFilePath)) {
+    Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+
+    # We're in a fresh and clean state, and ready to start a transfer.
+    $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $automateWin10Build"
     $newTransfer = Start-FileDownload
 
     # Disk might be full
@@ -485,23 +411,18 @@ If (!(Get-PrequisitesExist)) {
     }
 
     Try {
-        $outputLog += 'Creating registry values to cache the BitsTransfer JobId and FileHash'
-        $outputLog += Write-RegistryValue -Name $hashKey -Value $newTransfer.FileHash
+        $outputLog += 'Creating registry value to cache the BitsTransfer JobId'
         $outputLog += Write-RegistryValue -Name $jobIdKey -Value $NewTransfer.JobId
     } Catch {
-        $outputLog += Get-ErrorMessage $_ 'Experienced an error when attempting to create JobId and FileHash files'
+        $outputLog += Get-ErrorMessage $_ 'Experienced an error when attempting to create JobId file'
     }
 
     If (!(Test-RegistryValue -Name $jobIdKey)) {
         $outputLog += 'Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.'
         Get-BitsTransfer -JobId $newTransfer.JobId | Remove-BitsTransfer
-        Remove-Upgrade
+        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
         Invoke-Output $outputLog
         Return
-    }
-
-    If (!(Test-RegistryValue -Name $hashKey)) {
-        $outputLog += 'Could not create file hash registry entry. This is recoverable, there will be chances to grab this from the transfer once it has completed.'
     }
 
     # Finished starting up the transfer, can now exit script. Must have all necessary files ready to go before we move on from here.
@@ -510,15 +431,8 @@ If (!(Get-PrequisitesExist)) {
 } Else {
     $outputLog += "The ISO exists! Checking hash of downloaded file."
 
-    $hash = Get-RegistryValue -Name $hashKey
-
-    If (!$hash -and $isEnterprise) {
-        $hash = $automateIsoHash
-    }
-
-    If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
-        $outputLog += "The hash doesn't match!! This is terrible! Deleting all files and will start over!"
-        Remove-Upgrade
+    If (!(Get-HashCheck -Path $isoFilePath)) {
+        $outputLog += "The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is ||$hash||"
     } Else {
         $outputLog += "The hash matches! The file is all good! Exiting Script!"
     }
