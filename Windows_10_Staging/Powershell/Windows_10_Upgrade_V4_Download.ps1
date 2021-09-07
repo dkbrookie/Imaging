@@ -8,12 +8,12 @@ $outputLog = @()
 
 function Invoke-Output {
     param ([string[]]$output)
-    Write-Output ($output -join "`n")
+    Write-Output ($output -join "`n`n")
 }
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
-    Return "$Message | Error! -> $($Err.Exception.Message)"
+    Return "$Message $($Err.Exception.Message)"
 }
 
 <#
