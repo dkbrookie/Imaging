@@ -1,4 +1,4 @@
-$outputLog = $()
+$outputLog = @()
 
 <#
 ######################
@@ -7,8 +7,8 @@ $outputLog = $()
 #>
 
 function Invoke-Output {
-    param ([string]$output)
-    Write-Output ($output -join "`n")
+    param ([string[]]$output)
+    Write-Output ($output -join '`n')
 }
 
 function Get-ErrorMessage {
