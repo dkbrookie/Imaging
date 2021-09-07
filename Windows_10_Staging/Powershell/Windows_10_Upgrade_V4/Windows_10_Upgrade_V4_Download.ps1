@@ -167,10 +167,6 @@ function Get-HashCheck {
     Return $hashMatches.length -gt 0
 }
 
-function Get-PrequisitesExist {
-    Return Test-Path -Path $isoFilePath
-}
-
 function Start-FileDownload {
     $out += @()
 
