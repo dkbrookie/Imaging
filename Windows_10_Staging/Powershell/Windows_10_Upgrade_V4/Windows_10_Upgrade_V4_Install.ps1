@@ -62,6 +62,7 @@ $rebootInitiatedKey = "RebootInitiated"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+$winSetupErrorKey = 'WindowsSetupError'
 
 <#
 ######################
@@ -197,6 +198,14 @@ If ($versionComparison.Result) {
     $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
 } Else {
     $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
+    Invoke-Output $outputLog
+    Return
+}
+
+# We don't want windows setup to repeatedly try if the machine is having an issue
+If (Test-RegistryValue -Name $winSetupErrorKey) {
+    $setupErr = Get-RegistryValue -Name $winSetupErrorKey
+    $outputLog += "Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr"
     Invoke-Output $outputLog
     Return
 }
@@ -359,11 +368,15 @@ Try {
     Return
 }
 
-Try {
-    $outputLog += "The Windows 10 Upgrade Install has now been started silently in the background. No action from you is required, but please note a reboot will be reqired during the installation prcoess. It is highly recommended you save all of your open files!"
-    Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable" -PassThru
-} Catch {
-    $outputLog += "Setup ran into an issue while attempting to install the $automateWin10Build upgrade."
+$outputLog += "Starting upgrade installation of $automateWin10Build"
+$process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /NoReboot /Priority Low /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable" -PassThru -Wait
+
+$exitCode = $process.ExitCode
+
+# If setup exited with a non-zero exit code, windows setup experienced an error
+If ($exitCode -ne 0) {
+    $outputLog += Get-ErrorMessage $_ "Windows setup exited with a non-zero exit code. The exit code was: $exitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again."
+    Write-RegistryValue -Name $winSetupErrorKey -Value $process.StandardError
     Dismount-DiskImage $isoFilePath | Out-Null
 }
 

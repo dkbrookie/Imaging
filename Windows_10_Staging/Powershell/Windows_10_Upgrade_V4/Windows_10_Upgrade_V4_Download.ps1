@@ -205,7 +205,7 @@ function Start-FileDownload {
     Try {
         $transfer = Start-BitsTransfer -Source $downloadUrl -Destination $isoFilePath -TransferPolicy Standard -Asynchronous
     } Catch {
-        $out += (Get-ErrorMessage $_ "!Error: Could not start the transfer!")
+        $out += Get-ErrorMessage $_ "!Error: Could not start the transfer!"
         Return @{
             Output = $out
             TransferError = $True
@@ -228,28 +228,24 @@ function Start-FileDownload {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
+# Call in Get-Win10VersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
-# TODO: !!!This is only commented out for testing, uncomment this before production!!!
+Try {
+    $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
+} Catch {
+    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
+    Invoke-Output $outputLog
+    Return
+}
 
-
-## Call in Get-Win10VersionComparison
-# (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
-
-# Try {
-#     $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
-# } Catch {
-#     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
-#     Invoke-Output $outputLog
-#     Return
-# }
-
-# If ($versionComparison.Result) {
-#     $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
-# } Else {
-#     $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
-#     Invoke-Output $outputLog
-#     Return
-# }
+If ($versionComparison.Result) {
+    $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
+} Else {
+    $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
+    Invoke-Output $outputLog
+    Return
+}
 
 <#
 ######################
@@ -345,7 +341,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                     Try {
                         $transfer | Complete-BitsTransfer
                     } Catch {
-                        $outputLog += (Get-ErrorMessage $_ "Win10 $automateWin10Build successfully finished downloading, but there was an error completing the transfer and saving the file to disk.")
+                        $outputLog += Get-ErrorMessage $_ "Win10 $automateWin10Build successfully finished downloading, but there was an error completing the transfer and saving the file to disk."
                     }
 
                     $outputLog += "Win10 $automateWin10Build has finished downloading!"

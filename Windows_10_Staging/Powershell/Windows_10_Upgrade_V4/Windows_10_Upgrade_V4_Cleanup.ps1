@@ -38,13 +38,13 @@ $jobIdKey = "JobId"
 Try {
     Remove-ItemProperty -Path $regPath -Name $jobIdKey -Force -ErrorAction Stop
 } Catch {
-    $outputLog += (Get-ErrorMessage $_ "Could not remove JobId reg key.")
+    $outputLog += Get-ErrorMessage $_ "Could not remove JobId reg key."
 }
 
 Try {
     Remove-Item -Path $isoFilePath -Force -ErrorAction Stop
 } Catch {
-    $outputLog += (Get-ErrorMessage $_ "Could not remove ISO.")
+    $outputLog += Get-ErrorMessage $_ "Could not remove ISO."
 }
 
 $outputLog += "Done."
