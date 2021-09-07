@@ -47,4 +47,6 @@ Try {
     $outputLog += (Get-ErrorMessage $_ "Could not remove ISO.")
 }
 
+$outputLog += "Done."
+
 Invoke-Output $outputLog
