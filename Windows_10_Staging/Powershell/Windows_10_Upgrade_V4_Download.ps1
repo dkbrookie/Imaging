@@ -354,7 +354,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
 
                     If (!(Get-HashCheck -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-                        $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is ||$hash||"
+                        $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash"
                     } Else {
                         $outputLog += "The hash matches! The file is all good! Exiting Script!"
                     }
@@ -433,7 +433,7 @@ If (!(Test-Path -Path $isoFilePath)) {
 
     If (!(Get-HashCheck -Path $isoFilePath)) {
         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-        $outputLog += "The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is ||$hash||"
+        $outputLog += "The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash"
     } Else {
         $outputLog += "The hash matches! The file is all good! Exiting Script!"
     }
