@@ -1,4 +1,4 @@
-$outputLog = $()
+$outputLog = @()
 
 <#
 ######################
@@ -7,7 +7,7 @@ $outputLog = $()
 #>
 
 function Invoke-Output {
-    param ([string]$output)
+    param ([string[]]$output)
     Write-Output ($output -join "`n")
 }
 
@@ -353,7 +353,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                     $outputLog += "Checking hash of ISO file."
 
                     If (!(Get-HashCheck -Path $isoFilePath)) {
-                        $hash = Get-FileHash -Path $isoFilePath -Algorithm 'SHA256'
+                        $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
                         $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is ||$hash||"
                     } Else {
                         $outputLog += "The hash matches! The file is all good! Exiting Script!"
@@ -393,7 +393,7 @@ If (!(Test-Path -Path $isoFilePath)) {
     Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
 
     # We're in a fresh and clean state, and ready to start a transfer.
-    $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $automateWin10Build"
+    $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $automateWin10Build."
     $newTransfer = Start-FileDownload
 
     # Disk might be full
@@ -432,6 +432,7 @@ If (!(Test-Path -Path $isoFilePath)) {
     $outputLog += "The ISO exists! Checking hash of downloaded file."
 
     If (!(Get-HashCheck -Path $isoFilePath)) {
+        $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
         $outputLog += "The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is ||$hash||"
     } Else {
         $outputLog += "The hash matches! The file is all good! Exiting Script!"
