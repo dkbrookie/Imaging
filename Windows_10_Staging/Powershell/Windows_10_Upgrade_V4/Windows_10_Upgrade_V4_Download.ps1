@@ -323,7 +323,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                     } ElseIf ($jobState -like '*Error*') {
                         $outputLog += "The Transfer has entered an error state. The error state is $jobState. Removing transfer and files and starting over."
                         $transfer | Remove-BitsTransfer | Out-Null
-                        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+                        Remove-RegistryValue -Name $jobIdKey
                     } Else {
                         $outputLog += "Successfully resumed transfer. Exiting script."
                         Invoke-Output $outputLog
@@ -348,7 +348,8 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
                         $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash"
                     } Else {
-                        $outputLog += "The hash matches! The file is all good! Exiting Script!"
+                        $outputLog += "The hash matches! The file is all good! Removing cached JobId from registry and exiting Script!"
+                        Remove-RegistryValue -Name $jobIdKey
                     }
 
                     Invoke-Output $outputLog
@@ -364,7 +365,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
         }
     } Else {
         $outputLog += "Transfer was started, there is JobId cached, but there is no ISO and there is no existing transfer. The transfer or the ISO must have gotten deleted somehow. Cleaning up and restarting from the beginning."
-        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+        Remove-RegistryValue -Name $jobIdKey
     }
 }
 
@@ -382,7 +383,7 @@ FIRST RUN - INIT DOWNLOAD
 
 # If the ISO doesn't exist at this point, let's just start fresh.
 If (!(Test-Path -Path $isoFilePath)) {
-    Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+    Remove-RegistryValue -Name $jobIdKey
 
     # We're in a fresh and clean state, and ready to start a transfer.
     $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $automateWin10Build."
@@ -412,7 +413,7 @@ If (!(Test-Path -Path $isoFilePath)) {
     If (!(Test-RegistryValue -Name $jobIdKey)) {
         $outputLog += 'Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.'
         Get-BitsTransfer -JobId $newTransfer.JobId | Remove-BitsTransfer
-        Remove-ItemProperty -Path $regPath -Name $jobIdKey -EA 0
+        Remove-RegistryValue -Name $jobIdKey
         Invoke-Output $outputLog
         Return
     }
