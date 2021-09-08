@@ -121,7 +121,7 @@ function Get-RegistryValue {
 
 function Remove-RegistryValue {
     param ([string]$Name)
-    Remove-ItemProperty -Path $regPath -Name $Name -Force | Out-Null
+    Remove-ItemProperty -Path $regPath -Name $Name -Force -EA 0 | Out-Null
 }
 
 function Test-RegistryValue {
