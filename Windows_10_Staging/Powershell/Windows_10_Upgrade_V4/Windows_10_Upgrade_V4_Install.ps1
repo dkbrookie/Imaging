@@ -75,8 +75,9 @@ $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
-$regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
+$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10$($automateWin10Build)Upgrade"
 $rebootInitiatedKey = "RebootInitiated"
+$pendingRebootForThisUpgradeKey = "PendingReboot_$($automateWin10Build)"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
@@ -227,6 +228,13 @@ If ($lessThanRequestedBuild.Result) {
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
     $outputLog += "Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr"
+    Invoke-Output $outputLog
+    Return
+}
+
+# Check that this upgrade hasn't already occurred
+If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+    $outputLog += "This machine has already been upgraded but is pending reboot. Exiting script."
     Invoke-Output $outputLog
     Return
 }
@@ -398,10 +406,13 @@ If ($exitCode -ne 0) {
     Dismount-DiskImage $isoFilePath | Out-Null
 } Else {
     $outputLog += "Windows setup completed successfully."
-}
 
-If ($userIsLoggedOut) {
-    $outputLog += "Rebooting."
+    If ($userIsLoggedOut) {
+        $outputLog += "Rebooting."
+    } Else {
+        $outputLog += "User is logged in so marking pending reboot in registry."
+        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
+    }
 }
 
 Invoke-Output $outputLog
