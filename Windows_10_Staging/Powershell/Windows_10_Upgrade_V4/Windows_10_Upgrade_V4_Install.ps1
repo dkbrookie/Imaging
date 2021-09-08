@@ -40,9 +40,28 @@ If ($isEnterprise -and !$automateURL) {
     Return
 }
 
-# Make sure a hash has been defined for the Win10 ISO on Enterprise versions
-If ($isEnterprise -and !$automateIsoHash) {
-    Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO Hash was defined to check the intregrity of the file download. Please define the `$automateIsoHash variable with SHA256 hash for ISO defined in `$automateURL!"
+<#
+########################
+## Define File Hashes ##
+########################
+#>
+
+If ($isEnterprise) {
+    $hashArrays = @{
+        '20H2' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
+        '21H1' = @('')
+    }
+} Else {
+    $hashArrays = @{
+        '20H2' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
+        '21H1' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
+    }
+}
+
+$acceptableHashes = $hashArrays[$automateWin10Build]
+
+If (!$acceptableHashes) {
+    Write-Output "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
     Return
 }
 
@@ -57,7 +76,6 @@ $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
 $regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
-$hashKey = "Hash"
 $rebootInitiatedKey = "RebootInitiated"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
@@ -134,8 +152,10 @@ function Write-RegistryValue {
 }
 
 function Get-HashCheck {
-    param ([string]$Path, [string]$Hash)
-    Return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash -eq $Hash
+    param ([string]$Path)
+    $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
+    $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
+    Return $hashMatches.length -gt 0
 }
 
 function Read-PendingRebootStatus {
@@ -211,9 +231,9 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
 }
 
 <#
-#################
-# Prereq Checks #
-#################
+########################
+# Make sure ISO exists #
+########################
 #>
 
 # No need to continue if the ISO doesn't exist
@@ -223,29 +243,23 @@ If (!(Test-Path -Path $isoFilePath)) {
     Return
 }
 
-# No need to continue if the hash doesn't exist
-If (!(Test-RegistryValue -Name $hashKey)) {
-    $outputLog += "Somehow, the ISO exists, but the hash does not :'(. This should not have occurred. The ISO needs to be removed and redownloaded because there is no way to verify it's integrity. This script only handles installation. Exiting script."
-    Invoke-Output $outputLog
-    Return
-}
+<#
+##############################
+# Make sure the hash matches #
+##############################
+#>
 
-$hash = Get-RegistryValue -Name $hashKey
-
-# Definitely don't want to continue if the hash doesn't match
-If (!(Get-HashCheck -Path $isoFilePath -Hash $hash)) {
-    $outputLog += "An ISO file exists, but the hash does not match!! The hash must match! This ISO should be deleted and redownloaded. Exiting script."
+# Ensure hash matches
+If (!(Get-HashCheck -Path $isoFilePath)) {
+    $outputLog += "The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!"
     Invoke-Output $outputLog
     Return
 }
 
 <#
-########################
-# Logged in User Check #
-########################
-
-We don't want to run this installation when a user is logged in because we don't have any control over the reboots, so if we don't check,
-this could result in lost work. Communication should go out asking users to leave their machine ON but logged out.
+###########################
+# Check if user logged in #
+###########################
 #>
 
 # Call in Get-LogonStatus
@@ -253,17 +267,8 @@ this could result in lost work. Communication should go out asking users to leav
 
 $userLogonStatus = Get-LogonStatus
 
-# If userLogonStatus equals 0, there is no user logged in. If it is 1 or 2, there is a user logged in and we shouldn't continue.
+# If userLogonStatus equals 0, there is no user logged in. If it is 1 or 2, there is a user logged in and we shouldn't allow reboots.
 $userIsLoggedOut = $userLogonStatus -eq 0
-
-# We want to continue if no user is logged in, or if $installWithLoggedInUser is set to 1
-If (!$userIsLoggedOut -and !($installWithLoggedInUser -eq 1)) {
-    $outputLog += 'There is currently a user logged in to this machine. Will not continue with installation unless no one is logged in.'
-    Invoke-Output $outputLog
-    Return
-} ElseIf ($installWithLoggedInUser -eq 1) {
-    $outputLog += 'A user is logged in. This machine is configured to go ahead with the installation even if a user is logged in via the $installWithLoggedInUser flag. Continuing.'
-}
 
 <#
 ##########################
@@ -325,14 +330,18 @@ If ($pendingRebootCheck.Checks.Length) {
             Write-RegistryValue -Name $rebootInitiatedKey -Value 0
             $outputLog += "Reboot flags are now clear. Continuing."
         }
-    } Else {
-        $outputLog += "This system is pending a reboot. Reboot reason: $($pendingRebootCheck.Output)"
-        $outputLog += "Reboot initiated, exiting script, but this script will run again shortly to pick up where this left off if triggered from CW Automate."
+    } ElseIf ($userIsLoggedOut) {
+        # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
+        $outputLog += "This system is pending a reboot and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)"
         shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 $automateWin10Build."
 
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
         Write-RegistryValue -Name $rebootInitiatedKey -Value 1
-        $outputLog += "!REBOOT INITIATED:"
+        $outputLog = "!REBOOT INITIATED: " + $outputLog
+        Invoke-Output $outputLog
+        Return
+    } Else {
+        $outputLog += "This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but a user is currently logged in. Will try again later."
         Invoke-Output $outputLog
         Return
     }
@@ -368,8 +377,16 @@ Try {
     Return
 }
 
+$setupArgs = "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable"
+
+# If a user is logged in, we want setup to run with low priority and without forced reboot
+If (!$userIsLoggedOut) {
+    $outputLog += "A user is logged in. Will not allow reboot, but will continue."
+    $setupArgs = $setupArgs + " /NoReboot /Priority Low"
+}
+
 $outputLog += "Starting upgrade installation of $automateWin10Build"
-$process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList "/Auto Upgrade /Quiet /NoReboot /Priority Low /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable" -PassThru -Wait
+$process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList $setupArgs -PassThru -Wait
 
 $exitCode = $process.ExitCode
 
