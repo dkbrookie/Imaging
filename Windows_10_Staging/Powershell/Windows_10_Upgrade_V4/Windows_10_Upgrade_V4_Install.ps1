@@ -207,17 +207,18 @@ This script should only execute if this machine is a windows 10 machine that is 
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
 
 Try {
-    $versionComparison = Get-Win10VersionComparison -LessThan $automateWin10Build
+    $lessThanRequestedBuild = Get-Win10VersionComparison -LessThan $automateWin10Build
 } Catch {
     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
     Invoke-Output $outputLog
     Return
 }
 
-If ($versionComparison.Result) {
-    $outputLog += "Checked current version of windows and all looks good. " + $versionComparison.Output
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $automateWin10Build
+If ($lessThanRequestedBuild.Result) {
+    $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
-    $outputLog += "Cannot continue. The requested version should be less than the current version. " + $versionComparison.Output
+    $outputLog += "The current build is newer than or equal to the requested build. " + $lessThanRequestedBuild.Output
     Invoke-Output $outputLog
     Return
 }
@@ -395,6 +396,12 @@ If ($exitCode -ne 0) {
     $outputLog += Get-ErrorMessage $_ "Windows setup exited with a non-zero exit code. The exit code was: $exitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again."
     Write-RegistryValue -Name $winSetupErrorKey -Value $process.StandardError
     Dismount-DiskImage $isoFilePath | Out-Null
+} Else {
+    $outputLog += "Windows setup completed successfully."
+}
+
+If ($userIsLoggedOut) {
+    $outputLog += "Rebooting."
 }
 
 Invoke-Output $outputLog
