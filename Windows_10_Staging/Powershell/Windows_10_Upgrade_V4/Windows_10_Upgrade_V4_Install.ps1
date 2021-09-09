@@ -224,7 +224,7 @@ Try {
 If ($lessThanRequestedBuild.Result) {
     $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
-    $outputLog += "The current build is newer than or equal to the requested build. " + $lessThanRequestedBuild.Output
+    $outputLog += $lessThanRequestedBuild.Output + " Exiting Script."
 
     # If this update has already been installed, we can remove the pending reboot key that is set when the installation occurs
     Remove-RegistryValue -Name $pendingRebootForThisUpgradeKey
