@@ -57,7 +57,7 @@ $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
-$regPath = 'HKLM:\\SOFTWARE\LabTech\Service\Win10Upgrade'
+$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($automateWin10Build)_Upgrade"
 $jobIdKey = "JobId"
 
 <#
