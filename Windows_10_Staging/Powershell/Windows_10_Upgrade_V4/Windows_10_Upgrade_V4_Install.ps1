@@ -75,9 +75,9 @@ $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10$($automateWin10Build)Upgrade"
-$rebootInitiatedKey = "RebootInitiated"
-$pendingRebootForThisUpgradeKey = "PendingReboot_$($automateWin10Build)"
+$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($automateWin10Build)_Upgrade"
+$rebootInitiatedKey = "ExistingRebootInitiated"
+$pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
@@ -114,6 +114,11 @@ function Get-RegistryValue {
     } Catch {
         Return
     }
+}
+
+function Remove-RegistryValue {
+    param ([string]$Name)
+    Remove-ItemProperty -Path $regPath -Name $Name -Force -EA 0 | Out-Null
 }
 
 function Test-RegistryValue {
@@ -220,6 +225,9 @@ If ($lessThanRequestedBuild.Result) {
     $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
     $outputLog += "The current build is newer than or equal to the requested build. " + $lessThanRequestedBuild.Output
+
+    # If this update has already been installed, we can remove the pending reboot key that is set when the installation occurs
+    Remove-RegistryValue -Name $pendingRebootForThisUpgradeKey
     Invoke-Output $outputLog
     Return
 }
@@ -234,7 +242,7 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
 
 # Check that this upgrade hasn't already occurred
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-    $outputLog += "This machine has already been upgraded but is pending reboot. Exiting script."
+    $outputLog += "This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script."
     Invoke-Output $outputLog
     Return
 }
