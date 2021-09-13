@@ -350,12 +350,11 @@ If ($pendingRebootCheck.Checks.Length) {
     } ElseIf ($userIsLoggedOut) {
         # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
         $outputLog += "This system is pending a reboot and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)"
-        shutdown /r /f /c "This machines requires a reboot to continue upgrading to Windows 10 $automateWin10Build."
-
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
         Write-RegistryValue -Name $rebootInitiatedKey -Value 1
         $outputLog = "!REBOOT INITIATED: " + $outputLog
         Invoke-Output $outputLog
+        Restart-Computer -Force
         Return
     } Else {
         $outputLog += "This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but a user is currently logged in. Will try again later."
