@@ -394,12 +394,12 @@ Try {
     Return
 }
 
-$setupArgs = "/Auto Upgrade /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable"
+$setupArgs = "/Auto Upgrade /NoReboot /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable"
 
 # If a user is logged in, we want setup to run with low priority and without forced reboot
 If (!$userIsLoggedOut) {
-    $outputLog += "A user is logged in. Will not allow reboot, but will continue."
-    $setupArgs = $setupArgs + " /NoReboot /Priority Low"
+    $outputLog += "A user is logged in upon starting setup. Will not allow reboot, but will continue."
+    $setupArgs = $setupArgs + " /Priority Low"
 }
 
 $outputLog += "Starting upgrade installation of $automateWin10Build"
@@ -415,12 +415,19 @@ If ($exitCode -ne 0) {
 } Else {
     $outputLog += "Windows setup completed successfully."
 
-    If ($userIsLoggedOut) {
-        $outputLog += "Rebooting."
+    # Setup took a long time, so check user logon status again
+    $userLogonStatus = Get-LogonStatus
+
+    If ($userLogonStatus -eq 0) {
+        $outputLog += "No user is logged in so rebooting now."
+        Invoke-Output $outputLog
+        Restart-Computer -Force
+        Return
     } Else {
-        $outputLog += "User is logged in so marking pending reboot in registry."
+        $outputLog += "User is logged in after setup completed successfully, so marking pending reboot in registry."
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     }
 }
 
 Invoke-Output $outputLog
+Return
