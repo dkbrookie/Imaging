@@ -28,14 +28,14 @@ set we want to make sure to put it back in that location after the win10 image i
 # Define build number this script will upgrade you to, should be like '20H2'
 # This should be defined in the calling script
 If (!$automateWin10Build) {
-    Write-Output "!ERROR: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
+    Write-Output "!Error: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
     Return
 }
 
 $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
-    Write-Output "!ERROR: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $automateWin10Build manually!"
+    Write-Output "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $automateWin10Build manually!"
     Return
 }
 
@@ -43,7 +43,7 @@ $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 
 # Make sure a URL has been defined for the Win10 ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
-    Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    Write-Output "!Error: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
     Return
 }
 
@@ -81,7 +81,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$automateWin10Build]
 
 If (!$acceptableHashes) {
-    Write-Output "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    Write-Output "!Error: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
     Return
 }
 
@@ -230,22 +230,21 @@ This script should only execute if this machine is a windows 10 machine that is 
 Try {
     $lessThanRequestedBuild = Get-Win10VersionComparison -LessThan $automateWin10Build
 } Catch {
-    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
+    $outputLog += Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue."
     Invoke-Output $outputLog
     Return
 }
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $automateWin10Build
-If ($lessThanRequestedBuild.Result) {
-    $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
-} Else {
-    $outputLog += "The current build is newer than or equal to the requested build. " + $lessThanRequestedBuild.Output
+$outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $automateWin10Build
+If (!$lessThanRequestedBuild.Result) {
     If (Test-Path -Path $isoFilePath) {
         $outputLog += "An ISO for the requested version exists but it is unnecessary. Cleaning up to reclaim disk space."
         Remove-Item -Path $isoFilePath -Force -EA 0 | Out-Null
     }
 
+    $outputLog = "!Success: This upgrade is unnecessary.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -283,40 +282,40 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
             Switch ($jobState) {
                 # ...and that transfer is still transferring
                 'Transferring' {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Transferring'. Exiting script."
+                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Transferring'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Queued' {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Queued'. Exiting script."
+                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Queued'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Connecting' {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently 'Connecting'. Exiting script."
+                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Connecting'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # Might need to count transient errors and increase priority or transferpolicy after a certain number of errors
                 'TransientError' {
-                    $outputLog += "Win10 $automateWin10Build is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script."
+                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...or that transfer is suspended
                 'Suspended' {
-                    $outputLog += "Win10 $automateWin10Build is still transferring, but the transfer was suspended. Attempting to resume."
+                    $outputLog += "Win10 $automateWin10Build is still transferring, but the transfer is suspended. Attempting to resume."
 
                     Try {
                         $transfer | Resume-BitsTransfer -Asynchronous | Out-Null
                     } Catch {
-                        $outputLog += Get-ErrorMessage $_ "Could not resume the suspended transfer."
+                        $outputLog = (Get-ErrorMessage $_ "!Error: Could not resume the suspended transfer."), $outputLog
                         Invoke-Output $outputLog
                         Return
                     }
@@ -324,7 +323,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                     $jobState = $transfer.JobState
 
                     If ($jobState -eq 'Suspended') {
-                        $outputLog += "For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Sometimes it just takes a minute to restart. Exiting Script."
+                        $outputLog = "!Warning: For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Sometimes it just takes a minute to restart. Exiting Script.", $outputLog
                         Invoke-Output $outputLog
                         Return
                     } ElseIf ($jobState -like '*Error*') {
@@ -332,7 +331,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                         $transfer | Remove-BitsTransfer | Out-Null
                         Remove-RegistryValue -Name $jobIdKey
                     } Else {
-                        $outputLog += "Successfully resumed transfer. Exiting script."
+                        $outputLog = "!Warning: Successfully resumed transfer. The transfer's state is currently '$jobState.' Exiting script.", $outputLog
                         Invoke-Output $outputLog
                         Return
                     }
@@ -353,9 +352,9 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
 
                     If (!(Get-HashCheck -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-                        $outputLog += "The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash"
+                        $outputLog = "!Error: The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash", $outputLog
                     } Else {
-                        $outputLog += "The hash matches! The file is all good! Removing cached JobId from registry and exiting Script!"
+                        $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry and exiting Script!", $outputLog
                         Remove-RegistryValue -Name $jobIdKey
                     }
 
@@ -364,7 +363,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                 }
 
                 Default {
-                    $outputLog += "The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script."
+                    $outputLog = "!Error: The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
@@ -398,14 +397,14 @@ If (!(Test-Path -Path $isoFilePath)) {
 
     # Disk might be full
     If ($newTransfer.DiskFull) {
-        $outputLog = $newTransfer.Output + $outputLog
+        $outputLog = ("!Error: " + $newTransfer.Output), $outputLog
         Invoke-Output $outputLog
         Return
     }
 
     # Starting the bits transfer might have errored out
     If ($newTransfer.TransferError) {
-        $outputLog = $newTransfer.Output + $outputLog
+        $outputLog = ("!Error: " + $newTransfer.Output), $outputLog
         Invoke-Output $outputLog
         Return
     }
@@ -414,11 +413,11 @@ If (!(Test-Path -Path $isoFilePath)) {
         $outputLog += 'Creating registry value to cache the BitsTransfer JobId'
         $outputLog += Write-RegistryValue -Name $jobIdKey -Value $NewTransfer.JobId
     } Catch {
-        $outputLog += Get-ErrorMessage $_ 'Experienced an error when attempting to create JobId file'
+        $outputLog += Get-ErrorMessage $_ 'Experienced an error when attempting to create JobId in registry'
     }
 
     If (!(Test-RegistryValue -Name $jobIdKey)) {
-        $outputLog += 'Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.'
+        $outputLog = '!Error: Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.', $outputLog
         Get-BitsTransfer -JobId $newTransfer.JobId | Remove-BitsTransfer
         Remove-RegistryValue -Name $jobIdKey
         Invoke-Output $outputLog
@@ -433,9 +432,9 @@ If (!(Test-Path -Path $isoFilePath)) {
 
     If (!(Get-HashCheck -Path $isoFilePath)) {
         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-        $outputLog += "The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash"
+        $outputLog = "!Error: The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash", $outputLog
     } Else {
-        $outputLog += "The hash matches! The file is all good! Exiting Script!"
+        $outputLog = "!Success: The hash matches! The file is all good! The download is complete! Exiting Script!", $outputLog
     }
 
     Invoke-Output $outputLog
