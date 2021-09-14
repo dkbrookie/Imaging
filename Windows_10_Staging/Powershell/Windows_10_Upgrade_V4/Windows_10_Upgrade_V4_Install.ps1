@@ -367,6 +367,24 @@ If ($pendingRebootCheck.Checks.Length) {
 }
 
 <#
+###########################
+### Check if on battery ###
+##########################
+
+We don't want to run the install if on battery power.
+#>
+
+$battery = Get-WmiObject -Class Win32_Battery | Select-Object -First 1
+$hasBattery = $null -ne $battery
+$batteryInUse = $battery.BatteryStatus -eq 1
+
+If ($hasBattery -and $batteryInUse) {
+    $outputLog = "!Warning: This is a laptop and it's on battery power. It would be unwise to install a new OS on battery power. Exiting Script.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+<#
 ########################
 ####### Install ########
 ########################
