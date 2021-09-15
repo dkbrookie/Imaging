@@ -312,7 +312,7 @@ If (!(Test-Path -Path $LTSvc)) {
 $pendingRebootCheck = Read-PendingRebootStatus
 
 # If there is a pending reboot flag present on the system
-If ($pendingRebootCheck.Checks.Length) {
+If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
     $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
     $outputLog += $pendingRebootCheck.Output
 
@@ -361,6 +361,10 @@ If ($pendingRebootCheck.Checks.Length) {
         Invoke-Output $outputLog
         Return
     }
+} ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
+    $outputLog += "This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)"
+    Invoke-Output $outputLog
+    Return
 } Else {
     $outputLog += "Verified there is no reboot pending"
     Write-RegistryValue -Name $rebootInitiatedKey -Value 0
@@ -435,11 +439,14 @@ If ($exitCode -ne 0) {
     # Setup took a long time, so check user logon status again
     $userLogonStatus = Get-LogonStatus
 
-    If ($userLogonStatus -eq 0) {
-        $outputLog += "No user is logged in so rebooting now."
+    If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
+        $outputLog += "No user is logged in and machine has not been excluded from reboots, so rebooting now."
         Invoke-Output $outputLog
         Restart-Computer -Force
         Return
+    } ElseIf ($excludeFromReboot) {
+        $outputLog += "This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry."
+        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     } Else {
         $outputLog += "User is logged in after setup completed successfully, so marking pending reboot in registry."
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
