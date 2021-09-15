@@ -215,7 +215,8 @@ This script should only execute if this machine is a windows 10 machine that is 
 Try {
     $lessThanRequestedBuild = Get-Win10VersionComparison -LessThan $automateWin10Build
 } Catch {
-    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one. Cannot continue."
+    $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
+    $outputLog = "!Error: Exiting script.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -224,7 +225,8 @@ Try {
 If ($lessThanRequestedBuild.Result) {
     $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
-    $outputLog += $lessThanRequestedBuild.Output + " Exiting Script."
+    $outputLog += $lessThanRequestedBuild.Output
+    $outputLog = "!Success: The requested windows build is already installed!", $outputLog
 
     # If this update has already been installed, we can remove the pending reboot key that is set when the installation occurs
     Remove-RegistryValue -Name $pendingRebootForThisUpgradeKey
@@ -235,14 +237,14 @@ If ($lessThanRequestedBuild.Result) {
 # We don't want windows setup to repeatedly try if the machine is having an issue
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
-    $outputLog += "Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr"
+    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
     Invoke-Output $outputLog
     Return
 }
 
 # Check that this upgrade hasn't already occurred
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-    $outputLog += "This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script."
+    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -255,7 +257,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 
 # No need to continue if the ISO doesn't exist
 If (!(Test-Path -Path $isoFilePath)) {
-    $outputLog += "ISO doesn't exist yet.. Still waiting on that. Exiting script."
+    $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -268,7 +270,7 @@ If (!(Test-Path -Path $isoFilePath)) {
 
 # Ensure hash matches
 If (!(Get-HashCheck -Path $isoFilePath)) {
-    $outputLog += "The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!"
+    $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -341,6 +343,8 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
                 Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
             }
 
+            $outputLog = "!Warning: Still pending reboots.", $outputLog
+
             Invoke-Output $outputLog
             Return
         } Else {
@@ -349,20 +353,19 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         }
     } ElseIf ($userIsLoggedOut) {
         # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
-        $outputLog += "This system is pending a reboot and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)"
+        $outputLog = "!Warning: This system has a pending a reboot which must be cleared before installation. It has not been excluded from reboots, and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)", $outputLog
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
         Write-RegistryValue -Name $rebootInitiatedKey -Value 1
-        $outputLog = "!REBOOT INITIATED: " + $outputLog
         Invoke-Output $outputLog
         Restart-Computer -Force
         Return
     } Else {
-        $outputLog += "This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but a user is currently logged in. Will try again later."
+        $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but a user is currently logged in. Will try again later.", $outputLog
         Invoke-Output $outputLog
         Return
     }
 } ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
-    $outputLog += "This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)"
+    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
     Invoke-Output $outputLog
     Return
 } Else {
@@ -440,15 +443,15 @@ If ($exitCode -ne 0) {
     $userLogonStatus = Get-LogonStatus
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
-        $outputLog += "No user is logged in and machine has not been excluded from reboots, so rebooting now."
+        $outputLog = "!Warning: No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
         Invoke-Output $outputLog
         Restart-Computer -Force
         Return
     } ElseIf ($excludeFromReboot) {
-        $outputLog += "This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry."
+        $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry.", $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     } Else {
-        $outputLog += "User is logged in after setup completed successfully, so marking pending reboot in registry."
+        $outputLog = "!Warning: User is logged in after setup completed successfully, so marking pending reboot in registry.", $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     }
 }
