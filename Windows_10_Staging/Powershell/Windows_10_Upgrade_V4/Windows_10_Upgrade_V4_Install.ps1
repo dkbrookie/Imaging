@@ -1,5 +1,10 @@
 $outputLog = @()
 
+# $installationAttemptCount should be provided by calling script
+If (!$installationAttemptCount) {
+    $installationAttemptCount = 0
+}
+
 <#
 ######################
 ## Output Helper Functions ##
@@ -7,8 +12,8 @@ $outputLog = @()
 #>
 
 function Invoke-Output {
-    param ([string[]]$output)
-    Write-Output ($output -join "`n`n")
+    param ([string[]]$output, [string[]]$automateOutputParams)
+    Write-Output "outputLog=$($output -join "`n")|installationAttemptCount=$installationAttemptCount"
 }
 
 function Get-ErrorMessage {
@@ -426,6 +431,8 @@ If (!$userIsLoggedOut) {
     $setupArgs = $setupArgs + " /Priority Low"
 }
 
+# We're running the installer here, so we can go ahead and increment $installationAttemptCount
+$installationAttemptCount++
 $outputLog += "Starting upgrade installation of $automateWin10Build"
 $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList $setupArgs -PassThru -Wait
 
