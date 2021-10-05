@@ -33,7 +33,8 @@ set we want to make sure to put it back in that location after the win10 image i
 # Define build number this script will upgrade you to, should be like '20H2'
 # This should be defined in the calling script
 If (!$automateWin10Build) {
-    Write-Output "!ERROR: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
+    $outputLog += "!ERROR: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
+    Invoke-Output $outputLog
     Return
 }
 
@@ -41,7 +42,8 @@ $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 
 # Make sure a URL has been defined for the Win10 ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
-    Write-Output "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    $outputLog += "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    Invoke-Output $outputLog
     Return
 }
 
@@ -66,7 +68,8 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$automateWin10Build]
 
 If (!$acceptableHashes) {
-    Write-Output "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    $outputLog += "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    Invoke-Output $outputLog
     Return
 }
 
