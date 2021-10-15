@@ -1,15 +1,20 @@
-## Run this script last since it will reboot!
+# Enable TLS12
+[Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
 
-## Install PSWindowsUpdate
-Install-PackageProvider -Name NuGet -Force -Confirm:$False -EA 0 | Out-Null
-Install-Module -Name PSWindowsUpdate -Force -Confirm:$False -EA 0 | Out-Null
+# Install PSWindowsUpdate
+Install-PackageProvider -Name NuGet -Force -Confirm:$false -EA 0 | Out-Null
+Install-Module -Name PSWindowsUpdate -Force -Confirm:$false -EA 0 | Out-Null
 
-## Import the PowerShell Module
+# Import the PowerShell Module
 Import-Module PSWindowsUpdate
 
-## Install or update all drivers
+# Set update channel
+Add-WUServiceManager -ServiceID "7971f918-a847-4430-9279-4a52d1efe18d" -AddServiceFlag 7 -Confirm:$false
+
+# Install or update all drivers
 Write-Output 'Checking for driver updates...'
 Install-WindowsUpdate -Category Driver -AcceptAll -Install -Verbose
-## Install all missing windows updates
+
+# Install all missing windows updates
 Write-Output 'Checking for general Windows updates...'
 Install-WindowsUpdate -AcceptAll -Install -AutoReboot -Verbose
