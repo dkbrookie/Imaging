@@ -360,8 +360,10 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
                         $outputLog = "!Error: The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash", $outputLog
                     } Else {
-                        $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry and exiting Script!", $outputLog
+                        $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry, changing LastWriteTime to NOW (so that disk cleanup doesn't delete it), and exiting Script!", $outputLog
                         Remove-RegistryValue -Name $jobIdKey
+                        # Change the LastWriteTime to now b/c otherwise, the disk cleanup script will wipe it out
+                        (Get-Item -Path $isoFilePath).LastWriteTime = Get-Date
                     }
 
                     Invoke-Output $outputLog
