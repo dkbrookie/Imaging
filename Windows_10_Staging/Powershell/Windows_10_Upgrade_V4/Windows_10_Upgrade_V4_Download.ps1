@@ -180,8 +180,8 @@ function Start-FileDownload {
     If ($isEnterprise) {
         $downloadUrl = $automateURL
     } Else {
-        (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.GetWindowsIsoUrl.ps1') | Invoke-Expression
-        $fido = Get-WindowsIsoUrl -Rel $automateWin10Build
+        (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
+        $fido = Get-WindowsIsoUrl -Rel $automateWin10Build -Win 10
 
         $downloadUrl = $fido.Link
     }
