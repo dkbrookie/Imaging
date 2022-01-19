@@ -257,21 +257,6 @@ If (!$lessThanRequestedBuild.Result) {
     Return
 }
 
-# We don't want windows setup to repeatedly try if the machine is having an issue
-If (Test-RegistryValue -Name $winSetupErrorKey) {
-    $setupErr = Get-RegistryValue -Name $winSetupErrorKey
-    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
-# Check that this upgrade hasn't already occurred
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
 <#
 ######################
 # Existing Downloads #
@@ -398,6 +383,27 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
         $outputLog += "Transfer was started, there is JobId cached, but there is no ISO and there is no existing transfer. The transfer or the ISO must have gotten deleted somehow. Cleaning up and restarting from the beginning."
         Remove-RegistryValue -Name $jobIdKey
     }
+}
+
+<#
+########################################
+3 last checks before triggering download
+########################################
+#>
+
+# We don't want this to repeatedly download if the machine is having an issue, so check for existence of setup errors
+If (Test-RegistryValue -Name $winSetupErrorKey) {
+    $setupErr = Get-RegistryValue -Name $winSetupErrorKey
+    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# Check that this upgrade hasn't already occurred. No need to download iso if installation has already occurred
+If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
+    Invoke-Output $outputLog
+    Return
 }
 
 # ISO file could have been deleted or created in the last step, so check again.
