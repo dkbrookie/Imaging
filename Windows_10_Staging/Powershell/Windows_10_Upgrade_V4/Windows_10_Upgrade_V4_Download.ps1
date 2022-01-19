@@ -61,6 +61,8 @@ $windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
 $downloadDir = "$workDir\Win10\$automateWin10Build"
 $isoFilePath = "$downloadDir\$automateWin10Build.iso"
 $regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($automateWin10Build)_Upgrade"
+$pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
+$winSetupErrorKey = 'WindowsSetupError'
 $jobIdKey = "JobId"
 
 <#
@@ -251,6 +253,21 @@ If (!$lessThanRequestedBuild.Result) {
     }
 
     $outputLog = "!Success: This upgrade is unnecessary.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# We don't want windows setup to repeatedly try if the machine is having an issue
+If (Test-RegistryValue -Name $winSetupErrorKey) {
+    $setupErr = Get-RegistryValue -Name $winSetupErrorKey
+    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# Check that this upgrade hasn't already occurred
+If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
     Invoke-Output $outputLog
     Return
 }
