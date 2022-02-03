@@ -219,7 +219,7 @@ function Read-PendingRebootStatus {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-Write-Host 'checking OS version'
+Write-Output 'checking OS version'
 
 # Call in Get-Win10VersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
@@ -246,7 +246,7 @@ If ($lessThanRequestedBuild.Result) {
     Return
 }
 
-Write-Host 'checking for errors'
+Write-Output 'checking for errors'
 
 # We don't want windows setup to repeatedly try if the machine is having an issue
 If (Test-RegistryValue -Name $winSetupErrorKey) {
@@ -256,7 +256,7 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
     Return
 }
 
-Write-Host 'checking for pendingrebootforthisupgrade'
+Write-Output 'checking for pendingrebootforthisupgrade'
 
 # Check that this upgrade hasn't already occurred
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
@@ -271,7 +271,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 ########################
 #>
 
-Write-Host 'checking for iso'
+Write-Output 'checking for iso'
 
 # No need to continue if the ISO doesn't exist
 If (!(Test-Path -Path $isoFilePath)) {
@@ -286,7 +286,7 @@ If (!(Test-Path -Path $isoFilePath)) {
 ##############################
 #>
 
-Write-Host 'checking hash'
+Write-Output 'checking hash'
 
 # Ensure hash matches
 If (!(Get-HashCheck -Path $isoFilePath)) {
@@ -301,7 +301,7 @@ If (!(Get-HashCheck -Path $isoFilePath)) {
 ###########################
 #>
 
-Write-Host 'checking user'
+Write-Output 'checking user'
 
 # Call in Get-LogonStatus
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
@@ -327,7 +327,7 @@ If a reboot is pending for any of the reasons below, the Windows 10 upgrade will
 to handle this issue before attempting the update.
 #>
 
-Write-Host 'checking for existing pending reboots'
+Write-Output 'checking for existing pending reboots'
 
 ## We're going to save some logs to $env:windir so just make sure it exists and create it if it doesn't.
 $LTSvc = "$env:windir\LTSvc"
@@ -405,7 +405,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
 We don't want to run the install if on battery power.
 #>
 
-Write-Host 'checking battery'
+Write-Output 'checking battery'
 
 $battery = Get-WmiObject -Class Win32_Battery | Select-Object -First 1
 $hasBattery = $null -ne $battery
@@ -423,7 +423,7 @@ If ($hasBattery -and $batteryInUse) {
 ########################
 #>
 
-Write-Host 'installing'
+Write-Output 'installing'
 
 Try {
     ## The portable ISO EXE is going to mount our image as a new drive and we need to figure out which drive
