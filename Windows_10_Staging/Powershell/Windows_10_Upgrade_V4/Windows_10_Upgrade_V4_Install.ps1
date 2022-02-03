@@ -38,7 +38,14 @@ If (!$automateWin10Build) {
     Return
 }
 
-$isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
+# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
+Try {
+    $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
+} Catch {
+    $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
+    Invoke-Output $outputLog
+    Return
+}
 
 # Make sure a URL has been defined for the Win10 ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
