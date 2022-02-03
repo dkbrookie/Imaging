@@ -176,7 +176,7 @@ function Get-HashCheck {
 
 function Read-PendingRebootStatus {
     $out = @()
-    $rebootChecks = $()
+    $rebootChecks = @()
 
      ## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
     ## for an application to make an entry here too.
