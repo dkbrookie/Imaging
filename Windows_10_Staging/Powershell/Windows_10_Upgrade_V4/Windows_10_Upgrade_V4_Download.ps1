@@ -199,18 +199,13 @@ function Start-FileDownload {
         $downloadUrl = $fido.Link
     }
 
-    <#
-    Check total disk space, make sure there's at least 10GBs free. If there's not then run the disk cleanup script to see
-    if we can get enough space. The image is only 4.6GBs but once it starts installing / unpacking things it gets quite a
-    bit bigger. 10 GBs is more than we need but just playing it safe.
-    #>
-
     $transfer = $Null
 
     # Call in Get-IsDiskFull
     (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 
-    $diskCheck = Get-IsDiskFull -MinGb 10
+    # Check total disk space, make sure there's at least 16GBs free. If there's not then run the disk cleanup script to see if we can get enough space.
+    $diskCheck = Get-IsDiskFull -MinGb 16
 
     If ($diskCheck.DiskFull) {
         $out += $diskCheck.Output
