@@ -92,6 +92,7 @@ $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Com
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
+$WinSetupExitCodeKey = 'WindowsSetupExitCode'
 
 <#
 ######################
@@ -247,7 +248,8 @@ If ($lessThanRequestedBuild.Result) {
 # We don't want windows setup to repeatedly try if the machine is having an issue
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
-    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
+    $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -445,8 +447,10 @@ $exitCode = $process.ExitCode
 
 # If setup exited with a non-zero exit code, windows setup experienced an error
 If ($exitCode -ne 0) {
-    $outputLog += Get-ErrorMessage $_ "Windows setup exited with a non-zero exit code. The exit code was: $exitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again."
-    Write-RegistryValue -Name $winSetupErrorKey -Value $process.StandardError
+    $setupErr = $process.StandardError
+    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $exitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
+    Write-RegistryValue -Name $winSetupErrorKey -Value $setupErr
+    Write-RegistryValue -Name $WinSetupExitCodeKey -Value $exitCode
     Dismount-DiskImage $isoFilePath | Out-Null
 } Else {
     $outputLog += "Windows setup completed successfully."
