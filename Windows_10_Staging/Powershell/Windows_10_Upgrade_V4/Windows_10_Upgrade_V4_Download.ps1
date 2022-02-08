@@ -111,6 +111,10 @@ If (!(Test-Path $downloadDir)) {
     New-Item -Path $downloadDir -ItemType Directory | Out-Null
 }
 
+# Fix TLS
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Set-TLS.ps1') | Invoke-Expression
+$outputLog += Set-TLS
+
 <#
 ######################
 ## Helper Functions ##

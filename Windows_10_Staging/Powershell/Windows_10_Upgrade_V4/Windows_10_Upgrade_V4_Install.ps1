@@ -211,6 +211,10 @@ function Read-PendingRebootStatus {
     }
 }
 
+# Fix TLS for downloads
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Set-TLS.ps1') | Invoke-Expression
+$outputLog += Set-TLS
+
 <#
 ######################
 ## Check OS Version ##
