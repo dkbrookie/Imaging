@@ -448,9 +448,10 @@ $exitCode = $process.ExitCode
 # If setup exited with a non-zero exit code, windows setup experienced an error
 If ($exitCode -ne 0) {
     $setupErr = $process.StandardError
-    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $exitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
+    $convertedExitCode = '{0:x}' -f $exitCode
+    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $convertedExitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
     Write-RegistryValue -Name $winSetupErrorKey -Value $setupErr
-    Write-RegistryValue -Name $WinSetupExitCodeKey -Value $exitCode
+    Write-RegistryValue -Name $WinSetupExitCodeKey -Value $convertedExitCode
     Dismount-DiskImage $isoFilePath | Out-Null
 } Else {
     $outputLog += "Windows setup completed successfully."
