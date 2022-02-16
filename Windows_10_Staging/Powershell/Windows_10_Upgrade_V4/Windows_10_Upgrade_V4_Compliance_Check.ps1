@@ -43,7 +43,7 @@ function Get-ErrorMessage {
 Try {
   $targetWindowsBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 } Catch {
-  $outputLog += 'Function Get-OsVersionDefinitions errored out for some reason.'
+  $outputLog += Get-ErrorMessage $_'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Not able to determine OS release channel for this machine. This must be manually assessed and corrected.'
 
