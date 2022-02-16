@@ -131,6 +131,7 @@ If ($lessThanRequestedBuild.Result) {
   $outputLog = "!Success: The requested windows build (or higher) is already installed!", $outputLog
 
   $outputObject.compliant = '1'
+  $outputObject.nonComplianceReason = ''
   $outputObject.outputLog = $outputLog
 
   Invoke-Output $outputObject
