@@ -114,13 +114,10 @@ function Read-PendingRebootStatus {
 Try {
   $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetWindowsBuild
 } Catch {
-  # $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
-  # $outputLog = "!Error: Exiting script.", $outputLog
+  $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Could not determine if this machine is compliant or not. This machine may be on a brand new or otherwise unknown version of Windows. The table of Windows builds needs to be updated to include this version.'
-
-  # Write-Host 'teessssttter', (Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one.")
 
   Invoke-Output $outputObject
   Return
