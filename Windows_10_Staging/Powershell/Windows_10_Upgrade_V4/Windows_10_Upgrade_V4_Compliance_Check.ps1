@@ -40,16 +40,13 @@ function Get-ErrorMessage {
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
 # Determine target via release channel
-Try {
   $targetWindowsBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
-} Catch {
-  $outputLog += Get-ErrorMessage $_'Function Get-OsVersionDefinitions errored out for some reason.'
+  $outputLog += Get-ErrorMessage $_ 'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Not able to determine OS release channel for this machine. This must be manually assessed and corrected.'
 
   Invoke-Output $outputObject
   Return
-}
 
 <#
 ######################
@@ -110,14 +107,17 @@ function Read-PendingRebootStatus {
 ######################
 #>
 
-
+Try {
   $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetWindowsBuild
+} Catch {
+  $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Could not determine if this machine is compliant or not. This machine may be on a brand new or otherwise unknown version of Windows. The table of Windows builds needs to be updated to include this version.'
 
   Invoke-Output $outputObject
-
+  Return
+}
 
 # $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetWindowsBuild
 If ($lessThanRequestedBuild.Result) {
