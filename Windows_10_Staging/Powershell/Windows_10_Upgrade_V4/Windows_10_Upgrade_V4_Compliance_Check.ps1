@@ -37,8 +37,7 @@ function Get-ErrorMessage {
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/swap-windows-build-IDs-from-20H2-to-19042/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 # Call in Version Definitions
-# TODO: need to use an access token for this
-# (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
 # Determine target via release channel
 Try {
