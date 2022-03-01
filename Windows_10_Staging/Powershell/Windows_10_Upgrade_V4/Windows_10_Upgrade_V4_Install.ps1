@@ -242,11 +242,12 @@ Try {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-# Call in Get-Win10VersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-Win10VersionComparison.ps1') | Invoke-Expression
+# TODO: Switch to Master branch
+# Call in Get-DesktopWindowsVersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/swap-windows-build-IDs-from-20H2-to-19042/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
-    $lessThanRequestedBuild = Get-Win10VersionComparison -LessThan $automateWin10Build
+    $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $automateWin10Build -UseVersion
 } Catch {
     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
     $outputLog = "!Error: Exiting script.", $outputLog
