@@ -5,6 +5,11 @@ $outputObject = @{
   compliant = '0'
 }
 
+If (!$releaseChannel) {
+  $outputLog += '$releaseChannel was not specified! Defaulting to GA.'
+  $releaseChannel = 'GA'
+}
+
 # Fix TLS
 Try {
   # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
@@ -25,19 +30,17 @@ function Get-ErrorMessage {
   Return "$Message The error was: $($Err.Exception.Message)"
 }
 
-# TODO: Switch this to master branch
 # Call in Invoke-Output
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Flatten-arrays-in-invoke-output/Function.Invoke-Output.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
 
 # Call in registry helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 
-# TODO: swap this to the Master URL
 # Call in Get-Win10VersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/swap-windows-build-IDs-from-20H2-to-19042/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
-# Call in Version Definitions
-# (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+# Call in Get-Win10VersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
 # Determine target via release channel
 Try {
