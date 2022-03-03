@@ -36,11 +36,17 @@ function Get-ErrorMessage {
 # Call in registry helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 
-# Call in Get-Win10VersionComparison
+# Call in Get-DesktopWindowsVersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
-# Call in Get-Win10VersionComparison
+# Call in Get-OsVersionDefinitions
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+
+# Call in Get-IsOnBattery
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-battery-check-and-pending-reboot-check/Function.Get-IsOnBattery.ps1') | Invoke-Expression
+
+# Call in Get-PendingReboot
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-battery-check-and-pending-reboot-check/Function.Get-PendingReboot.ps1') | Invoke-Expression
 
 # Determine target via release channel
 Try {
@@ -65,47 +71,8 @@ $downloadDir = "$workDir\Win10\$targetWindowsBuild"
 $isoFilePath = "$downloadDir\$targetWindowsBuild.iso"
 $regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($targetWindowsBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
-$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
-
-function Read-PendingRebootStatus {
-  $out = @()
-  $rebootChecks = @()
-
-  ## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
-  ## for an application to make an entry here too.
-  $rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
-  $rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
-
-  ## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
-  ## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
-  ## aren't running so they can be renamed.
-  $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
-
-  If ($rbCheck1) {
-    $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
-    $rebootChecks += $rbCheck1
-  }
-
-  If ($rbCheck2) {
-    $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
-    $rebootChecks += $rbCheck2
-  }
-
-  If ($rbCheck3) {
-    $out += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
-    $out += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
-    $out = ($rbCheck3).PendingFileRenameOperations | Out-String
-    $rebootChecks += $rbCheck3
-  }
-
-  Return @{
-    Checks = $rebootChecks
-    Output = ($out -join "`n")
-  }
-}
 
 <#
 ######################
@@ -242,10 +209,11 @@ If (!(Test-Path -Path $LTSvc)) {
   New-Item -Path $LTSvc -ItemType Directory | Out-Null
 }
 
-$pendingRebootCheck = Read-PendingRebootStatus
+$pendingRebootCheck = Get-PendingReboot
+$pendingReboot = $pendingRebootCheck.PendingReboot
 
 # If there is a pending reboot flag present on the system
-If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
+If ($pendingReboot -and !$excludeFromReboot) {
   $outputLog += $pendingRebootCheck.Output
 
   $outputObject.outputLog = $outputLog
@@ -253,7 +221,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
 
   Invoke-Output $outputObject
   Return
-} ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
+} ElseIf ($pendingReboot -and $excludeFromReboot) {
     $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetWindowsBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
 
     $outputObject.outputLog = $outputLog
@@ -273,11 +241,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
 We don't want to run the install if on battery power.
 #>
 
-$battery = Get-WmiObject -Class Win32_Battery | Select-Object -First 1
-$hasBattery = $null -ne $battery
-$batteryInUse = $battery.BatteryStatus -eq 1
-
-If ($hasBattery -and $batteryInUse) {
+If (Get-IsOnBattery) {
   $outputLog = "!Warning: This is a laptop and it's on battery power. It would be unwise to install a new OS on battery power. Exiting Script.", $outputLog
 
   $outputObject.outputLog = $outputLog
