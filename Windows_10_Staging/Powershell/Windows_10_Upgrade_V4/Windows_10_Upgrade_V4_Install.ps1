@@ -242,9 +242,8 @@ Try {
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
 
-# TODO: Switch to Master branch
 # Call in Get-DesktopWindowsVersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/swap-windows-build-IDs-from-20H2-to-19042/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $automateWin10Build -UseVersion
