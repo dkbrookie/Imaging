@@ -39,8 +39,8 @@ function Get-ErrorMessage {
 # Call in Get-DesktopWindowsVersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
-# Call in Get-OsVersionDefinitions
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+# Call in Get-OsVersionDefinitions - $webClient is provided by calling script to access a private repo
+($webClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
 # Call in Get-IsOnBattery
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-battery-check-and-pending-reboot-check/Function.Get-IsOnBattery.ps1') | Invoke-Expression
