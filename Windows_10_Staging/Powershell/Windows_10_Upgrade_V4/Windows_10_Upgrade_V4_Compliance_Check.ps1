@@ -43,10 +43,10 @@ function Get-ErrorMessage {
 ($webClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
 # Call in Get-IsOnBattery
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-battery-check-and-pending-reboot-check/Function.Get-IsOnBattery.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsOnBattery.ps1') | Invoke-Expression
 
 # Call in Get-PendingReboot
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-battery-check-and-pending-reboot-check/Function.Get-PendingReboot.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-PendingReboot.ps1') | Invoke-Expression
 
 # Determine target via release channel
 Try {
