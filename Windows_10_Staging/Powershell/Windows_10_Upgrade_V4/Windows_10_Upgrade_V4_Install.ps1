@@ -16,7 +16,7 @@ If (!$installationAttemptCount) {
 #>
 
 function Invoke-Output {
-    param ([string[]]$output, [string[]]$automateOutputParams)
+    param ([string[]]$output)
     Write-Output "installationAttemptCount=$installationAttemptCount|outputLog=$($output -join "`n")"
 }
 
