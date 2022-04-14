@@ -48,10 +48,10 @@ function Get-ErrorMessage {
 Check for a few values that should be set before entering this script.
 #>
 
-# Define build number this script will upgrade you to, should be like '19043'
+# Define release channel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA'
 # This should be defined in the calling script
-If (!$targetBuild) {
-    $outputLog = "!Error: No Windows Build was defined! Please define the `$targetBuild variable to something like '19043' and then run this again!", $outputLog
+If (!$releaseChannel) {
+    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -76,6 +76,23 @@ Try {
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
     $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$automateURL variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+<#
+#########################
+## Get Target Build ID ##
+#########################
+#>
+
+# Call in Get-OsVersionDefinitions
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+
+$targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+
+If (!$targetBuild) {
+    $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
     Invoke-Output $outputLog
     Return
 }
