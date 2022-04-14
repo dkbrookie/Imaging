@@ -74,8 +74,8 @@ Try {
 }
 
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
-If ($isEnterprise -and !$automateURL) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$automateURL variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso.", $outputLog
+If ($isEnterprise -and !$enterpriseIsoUrl) {
+    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -244,7 +244,7 @@ function Start-FileDownload {
 
     # Get URL
     If ($isEnterprise) {
-        $downloadUrl = "$automateURL/Win_Ent_$targetBuild.iso"
+        $downloadUrl = "$enterpriseIsoUrl/Win_Ent_$targetBuild.iso"
     } Else {
         (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
 
