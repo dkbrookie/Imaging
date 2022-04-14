@@ -53,12 +53,12 @@ function Get-ErrorMessage {
 Check for a few values that should be set before entering this script.
 #>
 
-# Define build number this script will upgrade you to, should be like '19042'
+# Define release channel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA'
 # This should be defined in the calling script
-If (!$targetBuild) {
-    $outputLog = "!ERROR: No Windows Build was defined! Please define the `$targetBuild variable to something like '19042' and then run this again!", $outputLog
+If (!$releaseChannel) {
+    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again!", $outputLog
     Invoke-Output @{
-        outputLog = $outputLog
+        outputLog                = $outputLog
         installationAttemptCount = $installationAttemptCount
     }
     Return
@@ -73,6 +73,23 @@ Try {
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
     }
+    Return
+}
+
+<#
+#########################
+## Get Target Build ID ##
+#########################
+#>
+
+# Call in Get-OsVersionDefinitions
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+
+$targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+
+If (!$targetBuild) {
+    $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
+    Invoke-Output $outputLog
     Return
 }
 
