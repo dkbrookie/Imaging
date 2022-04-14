@@ -1,5 +1,8 @@
 $outputLog = @()
 
+# TODO: Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
+# TODO: (for future PR, not now) Add reboot handling
+
 <#
 ######################
 ## Output Helper Functions ##
@@ -21,14 +24,13 @@ function Get-ErrorMessage {
 ## CW Automate Checks ##
 ########################
 
-Check for a few values that should be set before entering this script. If this machine has an agent and a LocationID
-set we want to make sure to put it back in that location after the win10 image is installed
+Check for a few values that should be set before entering this script.
 #>
 
-# Define build number this script will upgrade you to, should be like '20H2'
+# Define build number this script will upgrade you to, should be like '19043'
 # This should be defined in the calling script
-If (!$automateWin10Build) {
-    $outputLog += "!Error: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
+If (!$targetBuild) {
+    $outputLog += "!Error: No Windows Build was defined! Please define the `$targetBuild variable to something like '19043' and then run this again!"
     Invoke-Output $outputLog
     Return
 }
@@ -36,7 +38,7 @@ If (!$automateWin10Build) {
 $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
-    $outputLog += "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $automateWin10Build manually!"
+    $outputLog += "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!"
     Invoke-Output $outputLog
     Return
 }
@@ -50,9 +52,9 @@ Try {
     Return
 }
 
-# Make sure a URL has been defined for the Win10 ISO on Enterprise versions
+# Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
-    $outputLog += "!Error: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
+    $outputLog += "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$automateURL variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso."
     Invoke-Output $outputLog
     Return
 }
@@ -64,13 +66,28 @@ If ($isEnterprise -and !$automateURL) {
 #>
 
 $workDir = "$env:windir\LTSvc\packages\OS"
-$windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
-$downloadDir = "$workDir\Win10\$automateWin10Build"
-$isoFilePath = "$downloadDir\$automateWin10Build.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($automateWin10Build)_Upgrade"
+$windowslogsDir = "$workDir\Windows-$targetBuild-Logs"
+$downloadDir = "$workDir\Windows\$targetBuild"
+$isoFilePath = "$downloadDir\$targetBuild.iso"
+$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $jobIdKey = "JobId"
+
+$windowsBuildToVersionMap = @{
+    '19042' = '20H2'
+    '19043' = '21H1'
+    '19044' = '21H2'
+    '22000' = '21H2'
+}
+
+$targetVersion = $windowsBuildToVersionMap[$targetBuild]
+
+If (!$targetVersion) {
+    $outputLog += "This script needs to be updated to handle $targetBuild! Please update script!"
+    Invoke-Output $outputLog
+    Return
+}
 
 <#
 ########################
@@ -80,22 +97,24 @@ $jobIdKey = "JobId"
 
 If ($isEnterprise) {
     $hashArrays = @{
-        '20H2' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
-        '21H1' = @('')
-        '21H2' = @('')
+        '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
+        '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
+        '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
+        '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
     }
 } Else {
     $hashArrays = @{
-        '20H2' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
-        '21H1' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
-        '21H2' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
+        '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
+        '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
+        '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
+        '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F')
     }
 }
 
-$acceptableHashes = $hashArrays[$automateWin10Build]
+$acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog += "!Error: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    $outputLog += "!Error: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!"
     Invoke-Output $outputLog
     Return
 }
@@ -118,7 +137,12 @@ If (!(Test-Path $downloadDir)) {
     New-Item -Path $downloadDir -ItemType Directory | Out-Null
 }
 
-# Fix TLS
+<#
+#############
+## Fix TLS ##
+#############
+#>
+
 Try {
     # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
     [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
@@ -202,10 +226,16 @@ function Start-FileDownload {
 
     # Get URL
     If ($isEnterprise) {
-        $downloadUrl = $automateURL
+        $downloadUrl = "$automateURL/Win_Ent_$targetBuild.iso"
     } Else {
         (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
-        $fido = Get-WindowsIsoUrl -Rel $automateWin10Build -Win 10
+
+        # If target build
+        If ($targetBuild -ge '22000') {
+            $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win 11
+        } Else {
+            $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win 10
+        }
 
         $downloadUrl = $fido.Link
     }
@@ -253,7 +283,7 @@ This script should only execute if this machine is a windows 10 machine that is 
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
-    $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $automateWin10Build -UseVersion
+    $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
     $outputLog += Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue."
     Invoke-Output $outputLog
@@ -262,7 +292,7 @@ Try {
 
 $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $automateWin10Build
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If (!$lessThanRequestedBuild.Result) {
     If (Test-Path -Path $isoFilePath) {
         $outputLog += "An ISO for the requested version exists but it is unnecessary. Cleaning up to reclaim disk space."
@@ -295,7 +325,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
 
     # If there is an existing transfer
     If ($transfer) {
-        $outputLog += "There is an existing transfer of $automateWin10Build."
+        $outputLog += "There is an existing transfer of $targetBuild."
 
         <# Removed probably unnecessary code relating to strange maaayybe potential states here. See bottom of script for removed code if it's necessary. #>
 
@@ -307,35 +337,35 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
             Switch ($jobState) {
                 # ...and that transfer is still transferring
                 'Transferring' {
-                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Transferring'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Transferring'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Queued' {
-                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Queued'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Queued'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Connecting' {
-                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently 'Connecting'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Connecting'. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # Might need to count transient errors and increase priority or transferpolicy after a certain number of errors
                 'TransientError' {
-                    $outputLog = "!Warning: Win10 $automateWin10Build is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script.", $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...or that transfer is suspended
                 'Suspended' {
-                    $outputLog += "Win10 $automateWin10Build is still transferring, but the transfer is suspended. Attempting to resume."
+                    $outputLog += "Windows $targetBuild is still transferring, but the transfer is suspended. Attempting to resume."
 
                     Try {
                         $transfer | Resume-BitsTransfer -Asynchronous | Out-Null
@@ -368,10 +398,10 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
                     Try {
                         $transfer | Complete-BitsTransfer
                     } Catch {
-                        $outputLog += Get-ErrorMessage $_ "Win10 $automateWin10Build successfully finished downloading, but there was an error completing the transfer and saving the file to disk."
+                        $outputLog += Get-ErrorMessage $_ "Windows $targetBuild successfully finished downloading, but there was an error completing the transfer and saving the file to disk."
                     }
 
-                    $outputLog += "Win10 $automateWin10Build has finished downloading!"
+                    $outputLog += "Windows $targetBuild has finished downloading!"
 
                     $outputLog += "Checking hash of ISO file."
 
@@ -440,7 +470,7 @@ If (!(Test-Path -Path $isoFilePath)) {
     Remove-RegistryValue -Name $jobIdKey
 
     # We're in a fresh and clean state, and ready to start a transfer.
-    $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $automateWin10Build."
+    $outputLog += "Did not find an existing ISO or transfer. Starting transfer of $targetBuild."
     $newTransfer = Start-FileDownload
 
     # Disk might be full
