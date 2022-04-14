@@ -55,7 +55,7 @@ Check for a few values that should be set before entering this script.
 # Define build number this script will upgrade you to, should be like '19042'
 # This should be defined in the calling script
 If (!$targetBuild) {
-    $outputLog += "!ERROR: No Windows Build was defined! Please define the `$targetBuild variable to something like '19042' and then run this again!"
+    $outputLog = "!ERROR: No Windows Build was defined! Please define the `$targetBuild variable to something like '19042' and then run this again!", $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -100,7 +100,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog += "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!"
+    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!", $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount

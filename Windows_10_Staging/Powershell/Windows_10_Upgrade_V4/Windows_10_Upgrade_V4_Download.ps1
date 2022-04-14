@@ -50,7 +50,7 @@ Check for a few values that should be set before entering this script.
 # Define build number this script will upgrade you to, should be like '19043'
 # This should be defined in the calling script
 If (!$targetBuild) {
-    $outputLog += "!Error: No Windows Build was defined! Please define the `$targetBuild variable to something like '19043' and then run this again!"
+    $outputLog = "!Error: No Windows Build was defined! Please define the `$targetBuild variable to something like '19043' and then run this again!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -58,7 +58,7 @@ If (!$targetBuild) {
 $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
-    $outputLog += "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!"
+    $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -74,7 +74,7 @@ Try {
 
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$automateURL) {
-    $outputLog += "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$automateURL variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso."
+    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$automateURL variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso.", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -134,7 +134,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog += "!Error: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!"
+    $outputLog = "!Error: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -285,7 +285,7 @@ This script should only execute if this machine is a windows 10 machine that is 
 Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
-    $outputLog += Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue."
+    $outputLog = (Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue."), $outputLog
     Invoke-Output $outputLog
     Return
 }
