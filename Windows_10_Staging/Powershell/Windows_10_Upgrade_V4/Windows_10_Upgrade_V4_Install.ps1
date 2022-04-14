@@ -10,15 +10,34 @@ If (!$installationAttemptCount) {
 }
 
 <#
+#############
+## Fix TLS ##
+#############
+#>
+
+Try {
+    # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
+    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+    $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
+}
+Catch {
+    $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
+    # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
+    $psVers = $PSVersionTable.PSVersion
+
+    If ($psVers.Major -lt 3) {
+        $outputLog += "Powershell version installed is only $psVers which has known issues with this script directly related to successful file downloads. Script will continue, but may be unsuccessful."
+    }
+}
+
+<#
 ######################
 ## Output Helper Functions ##
 ######################
 #>
 
-function Invoke-Output {
-    param ([string[]]$output)
-    Write-Output "installationAttemptCount=$installationAttemptCount|outputLog=$($output -join "`n")"
-}
+# Call in Invoke-Output
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
@@ -37,7 +56,10 @@ Check for a few values that should be set before entering this script.
 # This should be defined in the calling script
 If (!$targetBuild) {
     $outputLog += "!ERROR: No Windows Build was defined! Please define the `$targetBuild variable to something like '19042' and then run this again!"
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -46,7 +68,10 @@ Try {
     $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 } Catch {
     $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -76,7 +101,10 @@ $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
     $outputLog += "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!"
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -218,26 +246,6 @@ function Read-PendingRebootStatus {
 }
 
 <#
-#############
-## Fix TLS ##
-#############
-#>
-
-Try {
-    # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
-    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
-    $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
-} Catch {
-    $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
-    # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
-    $psVers = $PSVersionTable.PSVersion
-
-    If ($psVers.Major -lt 3) {
-        $outputLog += "Powershell version installed is only $psVers which has known issues with this script directly related to successful file downloads. Script will continue, but may be unsuccessful."
-    }
-}
-
-<#
 ######################
 ## Check OS Version ##
 ######################
@@ -253,7 +261,10 @@ Try {
 } Catch {
     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
     $outputLog = "!Error: Exiting script.", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -266,7 +277,10 @@ If ($lessThanRequestedBuild.Result) {
 
     # If this update has already been installed, we can remove the pending reboot key that is set when the installation occurs
     Remove-RegistryValue -Name $pendingRebootForThisUpgradeKey
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -275,7 +289,10 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
     $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
     $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -285,7 +302,10 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
         $outputLog = "!Warning: This machine has already been upgraded but is pending reboot. No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Restart-Computer -Force
         Return
     } Else {
@@ -299,7 +319,10 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     }
 
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -312,7 +335,10 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 # No need to continue if the ISO doesn't exist
 If (!(Test-Path -Path $isoFilePath)) {
     $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script.", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -325,7 +351,10 @@ If (!(Test-Path -Path $isoFilePath)) {
 # Ensure hash matches
 If (!(Get-HashCheck -Path $isoFilePath)) {
     $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -398,7 +427,10 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
 
             $outputLog = "!Warning: Still pending reboots.", $outputLog
 
-            Invoke-Output $outputLog
+            Invoke-Output @{
+                outputLog = $outputLog
+                installationAttemptCount = $installationAttemptCount
+            }
             Return
         } Else {
             Write-RegistryValue -Name $rebootInitiatedKey -Value 0
@@ -409,17 +441,26 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         $outputLog = "!Warning: This system has a pending a reboot which must be cleared before installation. It has not been excluded from reboots, and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)", $outputLog
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
         Write-RegistryValue -Name $rebootInitiatedKey -Value 1
-        Invoke-Output $outputLog
+        Invoke-Output @{
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Restart-Computer -Force
         Return
     } Else {
         $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later.", $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 } ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
     $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 } Else {
     $outputLog += "Verified there is no reboot pending"
@@ -440,7 +481,10 @@ $batteryInUse = $battery.BatteryStatus -eq 1
 
 If ($hasBattery -and $batteryInUse) {
     $outputLog = "!Warning: This is a laptop and it's on battery power. It would be unwise to install a new OS on battery power. Exiting Script.", $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -467,7 +511,10 @@ Try {
 } Catch {
     $outputLog += "Could not mount the ISO for some reason. Exiting script."
     Dismount-DiskImage $isoFilePath | Out-Null
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -502,7 +549,10 @@ If ($exitCode -ne 0) {
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
         $outputLog = "!Warning: No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Restart-Computer -Force
         Return
     } ElseIf ($excludeFromReboot) {
@@ -514,5 +564,8 @@ If ($exitCode -ne 0) {
     }
 }
 
-Invoke-Output $outputLog
+Invoke-Output @{
+    outputLog = $outputLog
+    installationAttemptCount = $installationAttemptCount
+}
 Return

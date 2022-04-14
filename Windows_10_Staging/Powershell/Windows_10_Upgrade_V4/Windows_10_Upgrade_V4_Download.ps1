@@ -5,15 +5,34 @@ $outputLog = @()
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 
 <#
+#############
+## Fix TLS ##
+#############
+#>
+
+Try {
+    # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
+    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+    $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
+}
+Catch {
+    $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
+    # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
+    $psVers = $PSVersionTable.PSVersion
+
+    If ($psVers.Major -lt 3) {
+        $outputLog += "Powershell version installed is only $psVers which has known issues with this script directly related to successful file downloads. Script will continue, but may be unsuccessful."
+    }
+}
+
+<#
 ######################
 ## Output Helper Functions ##
 ######################
 #>
 
-function Invoke-Output {
-    param ([string[]]$output)
-    Write-Output ($output -join "`n`n")
-}
+# Call in Invoke-Output
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
@@ -136,26 +155,6 @@ If (!(Test-Path $windowslogsDir)) {
 
 If (!(Test-Path $downloadDir)) {
     New-Item -Path $downloadDir -ItemType Directory | Out-Null
-}
-
-<#
-#############
-## Fix TLS ##
-#############
-#>
-
-Try {
-    # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
-    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
-    $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
-} Catch {
-    $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
-    # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
-    $psVers = $PSVersionTable.PSVersion
-
-    If ($psVers.Major -lt 3) {
-        $outputLog += "Powershell version installed is only $psVers which has known issues with this script directly related to successful file downloads. Script will continue, but may be unsuccessful."
-    }
 }
 
 <#
