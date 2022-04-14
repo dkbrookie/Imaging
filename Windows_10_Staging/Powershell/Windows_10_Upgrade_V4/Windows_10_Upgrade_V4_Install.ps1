@@ -1,7 +1,8 @@
 $outputLog = @()
 
-# TODO: Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
+# TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) Add reboot handling
+# TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 
 # $installationAttemptCount should be provided by calling script
 If (!$installationAttemptCount) {
@@ -278,9 +279,26 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
     Return
 }
 
-# Check that this upgrade hasn't already occurred
+# Check that this upgrade hasn't already occurred, if it has, see if we can reboot
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
+    $userLogonStatus = Get-LogonStatus
+
+    If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
+        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot. No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
+        Invoke-Output $outputLog
+        Restart-Computer -Force
+        Return
+    } Else {
+        If ($excludeFromReboot) {
+            $reason = 'Machine has been excluded from automatic reboots'
+        } Else {
+            $reason = 'User is logged in'
+        }
+
+        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. $reason, so not rebooting.", $outputLog
+        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
+    }
+
     Invoke-Output $outputLog
     Return
 }
