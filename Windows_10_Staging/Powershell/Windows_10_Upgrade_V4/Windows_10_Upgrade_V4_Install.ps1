@@ -1,5 +1,8 @@
 $outputLog = @()
 
+# TODO: Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
+# TODO: (for future PR, not now) Add reboot handling
+
 # $installationAttemptCount should be provided by calling script
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
@@ -26,14 +29,13 @@ function Get-ErrorMessage {
 ## CW Automate Checks ##
 ########################
 
-Check for a few values that should be set before entering this script. If this machine has an agent and a LocationID
-set we want to make sure to put it back in that location after the win10 image is installed
+Check for a few values that should be set before entering this script.
 #>
 
-# Define build number this script will upgrade you to, should be like '20H2'
+# Define build number this script will upgrade you to, should be like '19042'
 # This should be defined in the calling script
-If (!$automateWin10Build) {
-    $outputLog += "!ERROR: No Windows Build was defined! Please define the `$automateWin10Build variable to something like '20H2' and then run this again!"
+If (!$targetBuild) {
+    $outputLog += "!ERROR: No Windows Build was defined! Please define the `$targetBuild variable to something like '19042' and then run this again!"
     Invoke-Output $outputLog
     Return
 }
@@ -47,13 +49,6 @@ Try {
     Return
 }
 
-# Make sure a URL has been defined for the Win10 ISO on Enterprise versions
-If ($isEnterprise -and !$automateURL) {
-    $outputLog += "!ERROR: This is a Win10 Enterprise machine and no ISO URL was defined to download Windows 10 $automateWin10Build. This is required for Enterpise machines! Please define the `$automateURL variable with a URL to the ISO and then run this again!"
-    Invoke-Output $outputLog
-    Return
-}
-
 <#
 ########################
 ## Define File Hashes ##
@@ -62,22 +57,24 @@ If ($isEnterprise -and !$automateURL) {
 
 If ($isEnterprise) {
     $hashArrays = @{
-        '20H2' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
-        '21H1' = @('')
-        '21H2' = @('')
+        '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
+        '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
+        '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
+        '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
     }
 } Else {
     $hashArrays = @{
-        '20H2' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
-        '21H1' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
-        '21H2' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
+        '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
+        '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
+        '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
+        '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F')
     }
 }
 
-$acceptableHashes = $hashArrays[$automateWin10Build]
+$acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog += "!ERROR: There is no HASH defined for $automateWin10Build in the script! Please edit the script and define an expected file hash for this build!"
+    $outputLog += "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!"
     Invoke-Output $outputLog
     Return
 }
@@ -89,10 +86,10 @@ If (!$acceptableHashes) {
 #>
 
 $workDir = "$env:windir\LTSvc\packages\OS"
-$windowslogsDir = "$workDir\Win10-$automateWin10Build-Logs"
-$downloadDir = "$workDir\Win10\$automateWin10Build"
-$isoFilePath = "$downloadDir\$automateWin10Build.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($automateWin10Build)_Upgrade"
+$windowslogsDir = "$workDir\Windows-$targetBuild-Logs"
+$downloadDir = "$workDir\Windows\$targetBuild"
+$isoFilePath = "$downloadDir\$targetBuild.iso"
+$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
@@ -219,7 +216,12 @@ function Read-PendingRebootStatus {
     }
 }
 
-# Fix TLS for downloads
+<#
+#############
+## Fix TLS ##
+#############
+#>
+
 Try {
     # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
     [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
@@ -246,7 +248,7 @@ This script should only execute if this machine is a windows 10 machine that is 
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
-    $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $automateWin10Build -UseVersion
+    $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
     $outputLog = "!Error: Exiting script.", $outputLog
@@ -254,7 +256,7 @@ Try {
     Return
 }
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $automateWin10Build
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If ($lessThanRequestedBuild.Result) {
     $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
@@ -332,10 +334,9 @@ Reboots pending can be stored in multiple places. Check them all, if a reboot is
 and record that the reboot was started in the LTSvc folder. This is to use to reference after the reboot
 to confirm the reboot occured, then delete the registry keys if they still exist after the reboot. Windows
 and/or apps that requested the reboot frequently fail to remove these keys so it's common to still show
-"reboot pending" even after a successful reboot. Re-running this script to check for the "win10UpgradeReboot.txt"
-file is handled on the CW Automate side, or by just running this script a second time after the reboot.
+"reboot pending" even after a successful reboot.
 
-If a reboot is pending for any of the reasons below, the Windows 10 upgrade will bomb out so it's important
+If a reboot is pending for any of the reasons below, the Windows upgrade will bomb out so it's important
 to handle this issue before attempting the update.
 #>
 
@@ -394,12 +395,12 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         Restart-Computer -Force
         Return
     } Else {
-        $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but a user is currently logged in. Will try again later.", $outputLog
+        $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later.", $outputLog
         Invoke-Output $outputLog
         Return
     }
 } ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
-    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $automateWin10Build installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
+    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
     Invoke-Output $outputLog
     Return
 } Else {
@@ -462,7 +463,7 @@ If (!$userIsLoggedOut) {
 
 # We're running the installer here, so we can go ahead and increment $installationAttemptCount
 $installationAttemptCount++
-$outputLog += "Starting upgrade installation of $automateWin10Build"
+$outputLog += "Starting upgrade installation of $targetBuild"
 $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList $setupArgs -PassThru -Wait
 
 $exitCode = $process.ExitCode
