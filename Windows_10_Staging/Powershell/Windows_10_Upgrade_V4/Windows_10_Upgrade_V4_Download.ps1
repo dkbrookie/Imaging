@@ -27,9 +27,9 @@ Catch {
 }
 
 <#
-######################
-## Output Helper Functions ##
-######################
+####################
+## Output Helpers ##
+####################
 #>
 
 # Call in Invoke-Output
@@ -41,20 +41,153 @@ function Get-ErrorMessage {
 }
 
 <#
-########################
-## CW Automate Checks ##
-########################
+######################
+## Check for intent ##
+######################
 
-Check for a few values that should be set before entering this script.
+Validate that the script isn't being used with an indeterminate configuration / intention
+
+Define $releaseChannel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA' This should be defined in the
+calling script.
+
+OR you can specify $targetBuild (i.e. '19041') which will download a specific build
+
+OR you can specify $targetVersion (i.e '20H2') PLUS $windowsGeneration (i.e. '10' or '11') which will download a specific build
 #>
 
-# Define release channel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA'
-# This should be defined in the calling script
-If (!$releaseChannel) {
-    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again!", $outputLog
+# If none of the options are specified
+If (!$releaseChannel -and !$targetBuild -and (!$targetVersion -or !$windowsGeneration)) {
+    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again! Alternatively, you can provide `$targetBuild (i.e. '19041') or you can provide `$targetVersion (i.e. '20H2') AND `$windowsGeneration (i.e. '10' or '11').", $outputLog
     Invoke-Output $outputLog
     Return
 }
+
+# If both $releaseChannel and $targetBuild are specified
+If ($releaseChannel -and $targetBuild) {
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and `$targetBuild of '$targetBuild' were both specified. You should specify only one of these.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If both $releaseChannel and $targetVersion are specified
+If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
+    If ($targetVersion) {
+        $msg = "`$targetVersion of '$targetVersion'"
+    }
+    Else {
+        $msg = "`$windowsGeneration of '$windowsGeneration'"
+    }
+
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and $msg were both specified. You should specify only one of these.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If both $targetVersion and $targetBuild are specified
+If ($targetBuild -and ($targetVersion -or $windowsGeneration)) {
+    If ($targetVersion) {
+        $msg = "`$targetVersion of '$targetVersion'"
+    }
+    Else {
+        $msg = "`$windowsGeneration of '$windowsGeneration'"
+    }
+
+    $outputLog = "!Error: `$targetBuild of '$targetBuild' and $msg were both specified. You should specify only one of these.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If $targetVersion OR $windowsGeneration is specified, the other must be as well. Version IDs overlap so the intent could be either 10 or 11
+If (($targetVersion -and !$windowsGeneration) -or (!$targetVersion -and $windowsGeneration)) {
+    If ($targetVersion) {
+        $specified = "`$targetVersion of $targetVersion"
+        $notSpecified = '$windowsGeneration'
+    } Else {
+        $specified = "`$windowsGeneration of $windows"
+        $notSpecified = '$targetVersion'
+    }
+
+    $outputLog = "!Error: $specified was specified but $notSpecified was not specified. You must provide both.", $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+<#
+#########################
+## Get Target Build ID ##
+#########################
+
+We need $targetVersion, $targetBuild and $windowsGeneration in order to continue, so suss the missing values out of whatever options were provided
+#>
+
+$windowsBuildToVersionMap = @{
+    '19042' = '20H2'
+    '19043' = '21H1'
+    '19044' = '21H2'
+    '22000' = '21H2'
+}
+
+# We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
+If ($releaseChannel) {
+    # Call in Get-OsVersionDefinitions
+    (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+
+    $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+
+    If (!$targetBuild) {
+        $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+# If $targetVersion and $windowsGeneration have been specified instead of $releaseChannel, map the targetVersion to it's corresponding build ID
+} ElseIf ($targetVersion) {
+    # If $windowsGeneration is '10' remove all 11 versions from hash table
+    If ($windowsGeneration -eq '10') {
+        $windowsBuildToVersionMap = $windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Name.substring(0, 2) -eq 19 }
+
+    # If $windowsGeneration is '11' remove all 10 versions from hash table
+    } ElseIf ($windowsGeneration -eq '11') {
+        $windowsBuildToVersionMap = $windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Name.substring(0, 2) -eq 22 }
+
+    # If neither, that'd be an error state. Only windows 10 and 11 are supported
+    } Else {
+        $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'.", $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+    # Now grab the Build ID for the specified version
+    $targetBuild = ForEach ($Key in ($windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Value -eq $targetVersion })) { $Key.name }
+}
+
+# If $releaseChannel or $targetBuild were specified, we have $targetBuild but we don't have the $windowsGeneration or $targetVersion yet, so get those
+If ($targetBuild) {
+    # Set $windowsGeneration based on Build ID, need that later for Fido
+    If ($targetBuild.substring(0, 2) -eq 19) {
+        $windowsGeneration = '10'
+    } ElseIf ($targetBuild.substring(0, 2) -eq 22) {
+        $windowsGeneration = '11'
+    } Else {
+        $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!", $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+    $targetVersion = $windowsBuildToVersionMap[$targetBuild]
+
+    If (!$targetVersion) {
+        $outputLog += "No value for `$targetVersion could be determined from `$targetBuild. This script needs to be updated to handle $targetBuild! Please update script!"
+        Invoke-Output $outputLog
+        Return
+    }
+}
+
+<#
+########################
+## Environment Checks ##
+########################
+#>
 
 $Is64 = [Environment]::Is64BitOperatingSystem
 
@@ -75,24 +208,7 @@ Try {
 
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$enterpriseIsoUrl) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterpise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The filename must be named like Win_Ent_19044.iso.", $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
-<#
-#########################
-## Get Target Build ID ##
-#########################
-#>
-
-# Call in Get-OsVersionDefinitions
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
-
-$targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
-
-If (!$targetBuild) {
-    $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
+    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -111,21 +227,6 @@ $regPath = "HKLM:\\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $jobIdKey = "JobId"
-
-$windowsBuildToVersionMap = @{
-    '19042' = '20H2'
-    '19043' = '21H1'
-    '19044' = '21H2'
-    '22000' = '21H2'
-}
-
-$targetVersion = $windowsBuildToVersionMap[$targetBuild]
-
-If (!$targetVersion) {
-    $outputLog += "This script needs to be updated to handle $targetBuild! Please update script!"
-    Invoke-Output $outputLog
-    Return
-}
 
 <#
 ########################
@@ -152,7 +253,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog = "!Error: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!", $outputLog
+    $outputLog = "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!", $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -181,56 +282,8 @@ If (!(Test-Path $downloadDir)) {
 ######################
 #>
 
-function Get-RegistryValue {
-    param([string]$Name)
-
-    Try {
-        Return Get-ItemPropertyValue -Path $regPath -Name $Name -ErrorAction Stop
-    } Catch {
-        Return
-    }
-}
-
-function Remove-RegistryValue {
-    param ([string]$Name)
-    Remove-ItemProperty -Path $regPath -Name $Name -Force -EA 0 | Out-Null
-}
-
-function Test-RegistryValue {
-    param([string]$Name)
-
-    Try {
-        Return [bool](Get-RegistryValue -Name $Name)
-    } Catch {
-        Return $false
-    }
-}
-
-function Write-RegistryValue {
-    param ([string]$Name, [string]$Value)
-    $output = @()
-    $propertyPath = "$regPath\$Name"
-
-    If (!(Test-Path -Path $regPath)) {
-        Try {
-            New-Item -Path $regPath -Force -ErrorAction Stop | Out-Null
-        } Catch {
-            $output += Get-ErrorMessage $_ "Could not create registry key $regPath"
-        }
-    }
-
-    If (Test-RegistryValue -Name $Name) {
-        $output += "A value already exists at $propertyPath. Overwriting value."
-    }
-
-    Try {
-        New-ItemProperty -Path $regPath -Name $Name -Value $Value -Force -ErrorAction Stop | Out-Null
-    } Catch {
-        $output += Get-ErrorMessage $_ "Could not create registry property $propertyPath"
-    }
-
-    Return $output
-}
+# Call in Registry-Helpers
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 
 function Get-HashCheck {
     param ([string]$Path)
@@ -246,15 +299,10 @@ function Start-FileDownload {
     If ($isEnterprise) {
         $downloadUrl = "$enterpriseIsoUrl/Win_Ent_$targetBuild.iso"
     } Else {
+        # Call in Get-WindowsIsoUrl
         (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
 
-        # If target build
-        If ($targetBuild -ge '22000') {
-            $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win 11
-        } Else {
-            $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win 10
-        }
-
+        $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win $windowsGeneration
         $downloadUrl = $fido.Link
     }
 
@@ -294,7 +342,7 @@ function Start-FileDownload {
 ## Check OS Version ##
 ######################
 
-This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
+This script should only execute if this machine is a desktop windows machine that is on a version less than the requested version
 #>
 
 # Call in Get-DesktopWindowsVersionComparison
@@ -312,7 +360,7 @@ $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.O
 
 # $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If (!$lessThanRequestedBuild.Result) {
-    If (Test-Path -Path $isoFilePath) {
+    If (Test-Path -Path $isoFilePath -PathType Leaf) {
         $outputLog += "An ISO for the requested version exists but it is unnecessary. Cleaning up to reclaim disk space."
         Remove-Item -Path $isoFilePath -Force -EA 0 | Out-Null
     }
@@ -337,15 +385,13 @@ If no existing file or pending download, continue.
 $jobIdExists = Test-RegistryValue -Name $jobIdKey
 
 # If a jobId exists, but ISO doesn't exist, attempt to get the transfer
-If ($jobIdExists -and !(Test-Path -Path $isoFilePath)) {
+If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
     $jobId = Get-RegistryValue -Name $jobIdKey
     $transfer = Get-BitsTransfer -JobId $jobId -EA 0
 
     # If there is an existing transfer
     If ($transfer) {
         $outputLog += "There is an existing transfer of $targetBuild."
-
-        <# Removed probably unnecessary code relating to strange maaayybe potential states here. See bottom of script for removed code if it's necessary. #>
 
         # The transfer could have disappeared in the last step, so check again
         If ($transfer -and $transfer.JobState) {
@@ -472,7 +518,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 }
 
 # ISO file could have been deleted or created in the last step, so check again.
-If (!(Test-Path -Path $isoFilePath)) {
+If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
     # Just in case Complete-BitsTransfer takes a minute... It shouldn't, it's just a rename from a .tmp file, but juuust in case
     Start-Sleep -Seconds 10
 }
@@ -484,7 +530,7 @@ FIRST RUN - INIT DOWNLOAD
 #>
 
 # If the ISO doesn't exist at this point, let's just start fresh.
-If (!(Test-Path -Path $isoFilePath)) {
+If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
     Remove-RegistryValue -Name $jobIdKey
 
     # We're in a fresh and clean state, and ready to start a transfer.
