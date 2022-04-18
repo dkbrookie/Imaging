@@ -5,11 +5,6 @@ $outputLog = @()
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 # TODO: (for future PR, not now) Mark reboot pending in EDF. Once reboot is pending, don't run download script anymore.
 
-# $installationAttemptCount should be provided by calling script
-If (!$installationAttemptCount) {
-    $installationAttemptCount = 0
-}
-
 <#
 #############
 ## Fix TLS ##
@@ -20,8 +15,7 @@ Try {
     # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
     [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
     $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
-}
-Catch {
+} Catch {
     $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
     # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
     $psVers = $PSVersionTable.PSVersion
@@ -32,9 +26,9 @@ Catch {
 }
 
 <#
-######################
-## Output Helper Functions ##
-######################
+####################
+## Output Helpers ##
+####################
 #>
 
 # Call in Invoke-Output
@@ -46,21 +40,157 @@ function Get-ErrorMessage {
 }
 
 <#
-########################
-## CW Automate Checks ##
-########################
+######################
+## Check for intent ##
+######################
 
-Check for a few values that should be set before entering this script.
+Validate that the script isn't being used with an indeterminate configuration / intention
+
+Define $releaseChannel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA' This should be defined in the
+calling script.
+
+OR you can specify $targetBuild (i.e. '19041') which will download a specific build
+
+OR you can specify $targetVersion (i.e '20H2') PLUS $windowsGeneration (i.e. '10' or '11') which will download a specific build
 #>
 
-# Define release channel which will define which build this script will upgrade you to, should be 'Alpha', 'Beta' or 'GA'
-# This should be defined in the calling script
-If (!$releaseChannel) {
-    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again!", $outputLog
-    Invoke-Output @{
-        outputLog                = $outputLog
-        installationAttemptCount = $installationAttemptCount
+# If none of the options are specified
+If (!$releaseChannel -and !$targetBuild -and (!$targetVersion -or !$windowsGeneration)) {
+    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again! Alternatively, you can provide `$targetBuild (i.e. '19041') or you can provide `$targetVersion (i.e. '20H2') AND `$windowsGeneration (i.e. '10' or '11')." + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If both $releaseChannel and $targetBuild are specified
+If ($releaseChannel -and $targetBuild) {
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and `$targetBuild of '$targetBuild' were both specified. You should specify only one of these." + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If both $releaseChannel and $targetVersion are specified
+If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
+    If ($targetVersion) {
+        $msg = "`$targetVersion of '$targetVersion'"
+    } Else {
+        $msg = "`$windowsGeneration of '$windowsGeneration'"
     }
+
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and $msg were both specified. You should specify only one of these." + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If both $targetVersion and $targetBuild are specified
+If ($targetBuild -and ($targetVersion -or $windowsGeneration)) {
+    If ($targetVersion) {
+        $msg = "`$targetVersion of '$targetVersion'"
+    } Else {
+        $msg = "`$windowsGeneration of '$windowsGeneration'"
+    }
+
+    $outputLog = "!Error: `$targetBuild of '$targetBuild' and $msg were both specified. You should specify only one of these." + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# If $targetVersion OR $windowsGeneration is specified, the other must be as well. Version IDs overlap so the intent could be either 10 or 11
+If (($targetVersion -and !$windowsGeneration) -or (!$targetVersion -and $windowsGeneration)) {
+    If ($targetVersion) {
+        $specified = "`$targetVersion of $targetVersion"
+        $notSpecified = '$windowsGeneration'
+    } Else {
+        $specified = "`$windowsGeneration of $windows"
+        $notSpecified = '$targetVersion'
+    }
+
+    $outputLog = "!Error: $specified was specified but $notSpecified was not specified. You must provide both." + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+<#
+#########################
+## Get Target Build ID ##
+#########################
+
+We need $targetVersion, $targetBuild and $windowsGeneration in order to continue, so suss the missing values out of whatever options were provided
+#>
+
+$windowsBuildToVersionMap = @{
+    '19042' = '20H2'
+    '19043' = '21H1'
+    '19044' = '21H2'
+    '22000' = '21H2'
+}
+
+# We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
+If ($releaseChannel) {
+    # Call in Get-OsVersionDefinitions
+    $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+
+    $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+
+    If (!$targetBuild) {
+        $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository." + $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+    # If $targetVersion and $windowsGeneration have been specified instead of $releaseChannel, map the targetVersion to it's corresponding build ID
+} ElseIf ($targetVersion) {
+    # If $windowsGeneration is '10' remove all 11 versions from hash table
+    If ($windowsGeneration -eq '10') {
+        $windowsBuildToVersionMap = $windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Name.substring(0, 2) -eq 19 }
+
+        # If $windowsGeneration is '11' remove all 10 versions from hash table
+    } ElseIf ($windowsGeneration -eq '11') {
+        $windowsBuildToVersionMap = $windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Name.substring(0, 2) -eq 22 }
+
+        # If neither, that'd be an error state. Only windows 10 and 11 are supported
+    } Else {
+        $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'." + $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+    # Now grab the Build ID for the specified version
+    $targetBuild = ForEach ($Key in ($windowsBuildToVersionMap.GetEnumerator() | Where-Object { $_.Value -eq $targetVersion })) { $Key.name }
+}
+
+# If $releaseChannel or $targetBuild were specified, we have $targetBuild but we don't have the $windowsGeneration or $targetVersion yet, so get those
+If ($targetBuild) {
+    # Set $windowsGeneration based on Build ID, need that later for Fido
+    If ($targetBuild.substring(0, 2) -eq 19) {
+        $windowsGeneration = '10'
+    } ElseIf ($targetBuild.substring(0, 2) -eq 22) {
+        $windowsGeneration = '11'
+    } Else {
+        $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!" + $outputLog
+        Invoke-Output $outputLog
+        Return
+    }
+
+    $targetVersion = $windowsBuildToVersionMap[$targetBuild]
+
+    If (!$targetVersion) {
+        $outputLog += "No value for `$targetVersion could be determined from `$targetBuild. This script needs to be updated to handle $targetBuild! Please update script!"
+        Invoke-Output $outputLog
+        Return
+    }
+}
+
+<#
+########################
+## Environment Checks ##
+########################
+#>
+
+$Is64 = [Environment]::Is64BitOperatingSystem
+
+If (!$Is64) {
+    $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!" + $outputLog
+    Invoke-Output $outputLog
     Return
 }
 
@@ -69,26 +199,13 @@ Try {
     $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 } Catch {
     $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+    Invoke-Output $outputLog
     Return
 }
 
-<#
-#########################
-## Get Target Build ID ##
-#########################
-#>
-
-# Call in Get-OsVersionDefinitions
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
-
-$targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
-
-If (!$targetBuild) {
-    $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
+# Make sure a URL has been defined for the Win ISO on Enterprise versions
+If ($isEnterprise -and !$enterpriseIsoUrl) {
+    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -118,7 +235,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!", $outputLog
+    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -168,56 +285,9 @@ If (!(Test-Path $downloadDir)) {
 ## Helper Functions ##
 ######################
 #>
-function Get-RegistryValue {
-    param([string]$Name)
 
-    Try {
-        Return Get-ItemPropertyValue -Path $regPath -Name $Name -ErrorAction Stop
-    } Catch {
-        Return
-    }
-}
-
-function Remove-RegistryValue {
-    param ([string]$Name)
-    Remove-ItemProperty -Path $regPath -Name $Name -Force -EA 0 | Out-Null
-}
-
-function Test-RegistryValue {
-    param([string]$Name)
-
-    Try {
-        Return [bool](Get-RegistryValue -Name $Name)
-    } Catch {
-        Return $false
-    }
-}
-
-function Write-RegistryValue {
-    param ([string]$Name, [string]$Value)
-    $output = @()
-    $propertyPath = "$regPath\$Name"
-
-    If (!(Test-Path -Path $regPath)) {
-        Try {
-            New-Item -Path $regPath -Force -ErrorAction Stop | Out-Null
-        } Catch {
-            $output += Get-ErrorMessage $_ "Could not create registry key $regPath"
-        }
-    }
-
-    If (Test-RegistryValue -Name $Name) {
-        $output += "A value already exists at $propertyPath. Overwriting value."
-    }
-
-    Try {
-        New-ItemProperty -Path $regPath -Name $Name -Value $Value -Force -ErrorAction Stop | Out-Null
-    } Catch {
-        $output += Get-ErrorMessage $_ "Could not create registry property $propertyPath"
-    }
-
-    Return $output
-}
+# Call in Registry-Helpers
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 
 function Get-HashCheck {
     param ([string]$Path)
@@ -278,7 +348,7 @@ Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
     $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
-    $outputLog = "!Error: Exiting script.", $outputLog
+    $outputLog = "!Error: Exiting script." + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -291,7 +361,7 @@ If ($lessThanRequestedBuild.Result) {
     $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
     $outputLog += $lessThanRequestedBuild.Output
-    $outputLog = "!Success: The requested windows build is already installed!", $outputLog
+    $outputLog = "!Success: The requested windows build is already installed!" + $outputLog
 
     # If this update has already been installed, we can remove the pending reboot key that is set when the installation occurs
     Remove-RegistryValue -Name $pendingRebootForThisUpgradeKey
@@ -306,7 +376,7 @@ If ($lessThanRequestedBuild.Result) {
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
     $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
-    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr", $outputLog
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -319,7 +389,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
     $userLogonStatus = Get-LogonStatus
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
-        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot. No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
+        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot. No user is logged in and machine has not been excluded from reboots, so rebooting now." + $outputLog
         Invoke-Output @{
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
@@ -333,7 +403,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
             $reason = 'User is logged in'
         }
 
-        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. $reason, so not rebooting.", $outputLog
+        $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. $reason, so not rebooting." + $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     }
 
@@ -352,7 +422,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 
 # No need to continue if the ISO doesn't exist
 If (!(Test-Path -Path $isoFilePath)) {
-    $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script.", $outputLog
+    $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script." + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -368,7 +438,7 @@ If (!(Test-Path -Path $isoFilePath)) {
 
 # Ensure hash matches
 If (!(Get-HashCheck -Path $isoFilePath)) {
-    $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!", $outputLog
+    $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -443,7 +513,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
                 Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
             }
 
-            $outputLog = "!Warning: Still pending reboots.", $outputLog
+            $outputLog = "!Warning: Still pending reboots." + $outputLog
 
             Invoke-Output @{
                 outputLog = $outputLog
@@ -456,7 +526,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         }
     } ElseIf ($userIsLoggedOut) {
         # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
-        $outputLog = "!Warning: This system has a pending a reboot which must be cleared before installation. It has not been excluded from reboots, and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)", $outputLog
+        $outputLog = "!Warning: This system has a pending a reboot which must be cleared before installation. It has not been excluded from reboots, and no user is logged in. Rebooting. Reboot reason: $($pendingRebootCheck.Output)" + $outputLog
         # Mark registry with $rebootInitiatedKey so that on next run, we know that a reboot already occurred
         Write-RegistryValue -Name $rebootInitiatedKey -Value 1
         Invoke-Output @{
@@ -466,7 +536,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         Restart-Computer -Force
         Return
     } Else {
-        $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later.", $outputLog
+        $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later." + $outputLog
         Invoke-Output @{
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
@@ -474,7 +544,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         Return
     }
 } ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
-    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
+    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -498,7 +568,7 @@ $hasBattery = $null -ne $battery
 $batteryInUse = $battery.BatteryStatus -eq 1
 
 If ($hasBattery -and $batteryInUse) {
-    $outputLog = "!Warning: This is a laptop and it's on battery power. It would be unwise to install a new OS on battery power. Exiting Script.", $outputLog
+    $outputLog = "!Warning: This is a laptop and it's on battery power. It would be unwise to install a new OS on battery power. Exiting Script." + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -566,7 +636,7 @@ If ($exitCode -ne 0) {
     $userLogonStatus = Get-LogonStatus
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
-        $outputLog = "!Warning: No user is logged in and machine has not been excluded from reboots, so rebooting now.", $outputLog
+        $outputLog = "!Warning: No user is logged in and machine has not been excluded from reboots, so rebooting now." + $outputLog
         Invoke-Output @{
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
@@ -574,10 +644,10 @@ If ($exitCode -ne 0) {
         Restart-Computer -Force
         Return
     } ElseIf ($excludeFromReboot) {
-        $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry.", $outputLog
+        $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry." + $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     } Else {
-        $outputLog = "!Warning: User is logged in after setup completed successfully, so marking pending reboot in registry.", $outputLog
+        $outputLog = "!Warning: User is logged in after setup completed successfully, so marking pending reboot in registry." + $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
     }
 }

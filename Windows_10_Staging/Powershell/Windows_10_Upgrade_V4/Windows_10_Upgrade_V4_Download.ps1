@@ -72,8 +72,7 @@ If ($releaseChannel -and $targetBuild) {
 If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
     If ($targetVersion) {
         $msg = "`$targetVersion of '$targetVersion'"
-    }
-    Else {
+    } Else {
         $msg = "`$windowsGeneration of '$windowsGeneration'"
     }
 
@@ -86,8 +85,7 @@ If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
 If ($targetBuild -and ($targetVersion -or $windowsGeneration)) {
     If ($targetVersion) {
         $msg = "`$targetVersion of '$targetVersion'"
-    }
-    Else {
+    } Else {
         $msg = "`$windowsGeneration of '$windowsGeneration'"
     }
 
