@@ -42,7 +42,7 @@ Catch {
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
-    Return "$Message $($Err.Exception.Message)"
+    Return "$Message Error was: $($Err.Exception.Message)"
 }
 
 <#
