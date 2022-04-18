@@ -129,7 +129,7 @@ $windowsBuildToVersionMap = @{
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
 If ($releaseChannel) {
     # Call in Get-OsVersionDefinitions
-    (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+    $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
     $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 
