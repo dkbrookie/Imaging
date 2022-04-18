@@ -56,14 +56,14 @@ OR you can specify $targetVersion (i.e '20H2') PLUS $windowsGeneration (i.e. '10
 
 # If none of the options are specified
 If (!$releaseChannel -and !$targetBuild -and (!$targetVersion -or !$windowsGeneration)) {
-    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again! Alternatively, you can provide `$targetBuild (i.e. '19041') or you can provide `$targetVersion (i.e. '20H2') AND `$windowsGeneration (i.e. '10' or '11').", $outputLog
+    $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again! Alternatively, you can provide `$targetBuild (i.e. '19041') or you can provide `$targetVersion (i.e. '20H2') AND `$windowsGeneration (i.e. '10' or '11')." + $outputLog
     Invoke-Output $outputLog
     Return
 }
 
 # If both $releaseChannel and $targetBuild are specified
 If ($releaseChannel -and $targetBuild) {
-    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and `$targetBuild of '$targetBuild' were both specified. You should specify only one of these.", $outputLog
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and `$targetBuild of '$targetBuild' were both specified. You should specify only one of these." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -77,7 +77,7 @@ If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
         $msg = "`$windowsGeneration of '$windowsGeneration'"
     }
 
-    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and $msg were both specified. You should specify only one of these.", $outputLog
+    $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and $msg were both specified. You should specify only one of these." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -91,7 +91,7 @@ If ($targetBuild -and ($targetVersion -or $windowsGeneration)) {
         $msg = "`$windowsGeneration of '$windowsGeneration'"
     }
 
-    $outputLog = "!Error: `$targetBuild of '$targetBuild' and $msg were both specified. You should specify only one of these.", $outputLog
+    $outputLog = "!Error: `$targetBuild of '$targetBuild' and $msg were both specified. You should specify only one of these." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -106,7 +106,7 @@ If (($targetVersion -and !$windowsGeneration) -or (!$targetVersion -and $windows
         $notSpecified = '$targetVersion'
     }
 
-    $outputLog = "!Error: $specified was specified but $notSpecified was not specified. You must provide both.", $outputLog
+    $outputLog = "!Error: $specified was specified but $notSpecified was not specified. You must provide both." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -134,7 +134,7 @@ If ($releaseChannel) {
     $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 
     If (!$targetBuild) {
-        $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository.", $outputLog
+        $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository." + $outputLog
         Invoke-Output $outputLog
         Return
     }
@@ -151,7 +151,7 @@ If ($releaseChannel) {
 
     # If neither, that'd be an error state. Only windows 10 and 11 are supported
     } Else {
-        $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'.", $outputLog
+        $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'." + $outputLog
         Invoke-Output $outputLog
         Return
     }
@@ -168,7 +168,7 @@ If ($targetBuild) {
     } ElseIf ($targetBuild.substring(0, 2) -eq 22) {
         $windowsGeneration = '11'
     } Else {
-        $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!", $outputLog
+        $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!" + $outputLog
         Invoke-Output $outputLog
         Return
     }
@@ -191,7 +191,7 @@ If ($targetBuild) {
 $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
-    $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!", $outputLog
+    $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!" + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -207,7 +207,7 @@ Try {
 
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$enterpriseIsoUrl) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'", $outputLog
+    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -252,7 +252,7 @@ If ($isEnterprise) {
 $acceptableHashes = $hashArrays[$targetBuild]
 
 If (!$acceptableHashes) {
-    $outputLog = "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!", $outputLog
+    $outputLog = "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -350,7 +350,7 @@ This script should only execute if this machine is a desktop windows machine tha
 Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
-    $outputLog = (Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue."), $outputLog
+    $outputLog = (Get-ErrorMessage $_ "!Error: There was an issue when comparing the current version of windows to the requested one. Cannot continue.") + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -364,7 +364,7 @@ If (!$lessThanRequestedBuild.Result) {
         Remove-Item -Path $isoFilePath -Force -EA 0 | Out-Null
     }
 
-    $outputLog = "!Success: This upgrade is unnecessary.", $outputLog
+    $outputLog = "!Success: This upgrade is unnecessary." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -400,28 +400,28 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
             Switch ($jobState) {
                 # ...and that transfer is still transferring
                 'Transferring' {
-                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Transferring'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Transferring'. Exiting script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Queued' {
-                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Queued'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Queued'. Exiting script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # ...and that transfer is still transferring
                 'Connecting' {
-                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Connecting'. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently 'Connecting'. Exiting script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
 
                 # Might need to count transient errors and increase priority or transferpolicy after a certain number of errors
                 'TransientError' {
-                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script.", $outputLog
+                    $outputLog = "!Warning: Windows $targetBuild is still being transferred. It's state is currently TransientError. This is usually not a problem and it should correct itself. Exiting script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
@@ -433,7 +433,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                     Try {
                         $transfer | Resume-BitsTransfer -Asynchronous | Out-Null
                     } Catch {
-                        $outputLog = (Get-ErrorMessage $_ "!Error: Could not resume the suspended transfer."), $outputLog
+                        $outputLog = (Get-ErrorMessage $_ "!Error: Could not resume the suspended transfer.") + $outputLog
                         Invoke-Output $outputLog
                         Return
                     }
@@ -441,7 +441,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                     $jobState = $transfer.JobState
 
                     If ($jobState -eq 'Suspended') {
-                        $outputLog = "!Warning: For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Sometimes it just takes a minute to restart. Exiting Script.", $outputLog
+                        $outputLog = "!Warning: For some reason, the transfer is still suspended. Some other script or person may have interfered with this download. Sometimes it just takes a minute to restart. Exiting Script." + $outputLog
                         Invoke-Output $outputLog
                         Return
                     } ElseIf ($jobState -like '*Error*') {
@@ -449,7 +449,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                         $transfer | Remove-BitsTransfer | Out-Null
                         Remove-RegistryValue -Name $jobIdKey
                     } Else {
-                        $outputLog = "!Warning: Successfully resumed transfer. The transfer's state is currently '$jobState.' Exiting script.", $outputLog
+                        $outputLog = "!Warning: Successfully resumed transfer. The transfer's state is currently '$jobState.' Exiting script." + $outputLog
                         Invoke-Output $outputLog
                         Return
                     }
@@ -470,9 +470,9 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
 
                     If (!(Get-HashCheck -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-                        $outputLog = "!Error: The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash", $outputLog
+                        $outputLog = "!Error: The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash" + $outputLog
                     } Else {
-                        $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry, changing LastWriteTime to NOW (so that disk cleanup doesn't delete it), and exiting Script!", $outputLog
+                        $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry, changing LastWriteTime to NOW (so that disk cleanup doesn't delete it), and exiting Script!" + $outputLog
                         Remove-RegistryValue -Name $jobIdKey
                         # Change the LastWriteTime to now b/c otherwise, the disk cleanup script will wipe it out
                         (Get-Item -Path $isoFilePath).LastWriteTime = Get-Date
@@ -483,7 +483,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                 }
 
                 Default {
-                    $outputLog = "!Error: The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script.", $outputLog
+                    $outputLog = "!Error: The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
@@ -504,14 +504,14 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
 # We don't want this to repeatedly download if the machine is having an issue, so check for existence of setup errors
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
-    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr", $outputLog
+    $outputLog = "!Error: Windows setup experienced an error upon installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The error output is $setupErr" + $outputLog
     Invoke-Output $outputLog
     Return
 }
 
 # Check that this upgrade hasn't already occurred. No need to download iso if installation has already occurred
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
+    $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script." + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -538,14 +538,14 @@ If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
 
     # Disk might be full
     If ($newTransfer.DiskFull) {
-        $outputLog = ("!Error: " + $newTransfer.Output), $outputLog
+        $outputLog = ("!Error: " + $newTransfer.Output) + $outputLog
         Invoke-Output $outputLog
         Return
     }
 
     # Starting the bits transfer might have errored out
     If ($newTransfer.TransferError) {
-        $outputLog = ("!Error: " + $newTransfer.Output), $outputLog
+        $outputLog = ("!Error: " + $newTransfer.Output) + $outputLog
         Invoke-Output $outputLog
         Return
     }
@@ -558,7 +558,7 @@ If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
     }
 
     If (!(Test-RegistryValue -Name $jobIdKey)) {
-        $outputLog = '!Error: Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.', $outputLog
+        $outputLog = '!Error: Could not create JobId registry entry! Cannot continue without JobId key! Cancelling transfer and removing any files that were created. Exiting script.' + $outputLog
         Get-BitsTransfer -JobId $newTransfer.JobId | Remove-BitsTransfer
         Remove-RegistryValue -Name $jobIdKey
         Invoke-Output $outputLog
@@ -573,9 +573,9 @@ If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
 
     If (!(Get-HashCheck -Path $isoFilePath)) {
         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-        $outputLog = "!Error: The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash", $outputLog
+        $outputLog = "!Error: The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash" + $outputLog
     } Else {
-        $outputLog = "!Success: The hash matches! The file is all good! The download is complete! Exiting Script!", $outputLog
+        $outputLog = "!Success: The hash matches! The file is all good! The download is complete! Exiting Script!" + $outputLog
     }
 
     Invoke-Output $outputLog
