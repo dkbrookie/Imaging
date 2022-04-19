@@ -244,17 +244,6 @@ If ($isEnterprise) {
     }
 }
 
-$acceptableHashes = $hashArrays[$targetBuild]
-
-If (!$acceptableHashes) {
-    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
-}
-
 <#
 ######################
 ## Define Constants ##
@@ -273,6 +262,23 @@ $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Win
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $WinSetupExitCodeKey = 'WindowsSetupExitCode'
+$installationAttemptCountKey = 'InstallationAttemptCount'
+$acceptableHashes = $hashArrays[$targetBuild]
+
+$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
+
+If (!$installationAttemptCount) {
+    $installationAttemptCount = 0
+}
+
+If (!$acceptableHashes) {
+    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
+    Invoke-Output @{
+        outputLog                = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
+    Return
+}
 
 <#
 ######################
@@ -619,6 +625,9 @@ If (!$userIsLoggedOut) {
 
 # We're running the installer here, so we can go ahead and increment $installationAttemptCount
 $installationAttemptCount++
+
+Write-RegistryValue -Name $installationAttemptCountKey -Value $installationAttemptCount
+
 $outputLog += "Starting upgrade installation of $targetBuild"
 $process = Start-Process -FilePath "$mountedLetter\setup.exe" -ArgumentList $setupArgs -PassThru -Wait
 
