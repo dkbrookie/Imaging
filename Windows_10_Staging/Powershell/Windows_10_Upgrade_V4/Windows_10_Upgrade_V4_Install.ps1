@@ -637,7 +637,20 @@ $exitCode = $process.ExitCode
 If ($exitCode -ne 0) {
     $setupErr = $process.StandardError
     $convertedExitCode = '{0:x}' -f $exitCode
-    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $convertedExitCode. This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
+
+    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $convertedExitCode."
+
+    If ($convertedExitCode -eq 'c1900200') {
+        $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'"
+        $setupErr = 'Hardware configuration unsupported.'
+    }
+
+    If ($setupErr -eq '') {
+        $setupErr = 'Unknown Error - Windows Setup did not return an error message. Check the Exit Code.'
+    }
+
+    $outputLog += "This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
+
     Write-RegistryValue -Name $winSetupErrorKey -Value $setupErr
     Write-RegistryValue -Name $WinSetupExitCodeKey -Value $convertedExitCode
     Dismount-DiskImage $isoFilePath | Out-Null
