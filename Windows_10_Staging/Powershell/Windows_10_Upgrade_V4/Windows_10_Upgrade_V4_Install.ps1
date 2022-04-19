@@ -645,7 +645,7 @@ If ($exitCode -ne 0) {
     $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $convertedExitCode."
 
     If ($convertedExitCode -eq 'c1900200') {
-        $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'"
+        $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'. You may be able to force installation by setting `$forceInstallationWithUnsupportedHardware to `$true."
         $setupErr = 'Hardware configuration unsupported.'
     }
 
