@@ -26,13 +26,29 @@ Try {
 }
 
 <#
-####################
-## Output Helpers ##
-####################
+##########################
+## Call in Dependencies ##
+##########################
 #>
 
 # Call in Invoke-Output
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
+# Call in Get-OsVersionDefinitions
+$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+# Call in Registry-Helpers
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
+# Call in Get-WindowsIsoUrl
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
+# Call in Get-IsDiskFull
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
+# Call in Get-DesktopWindowsVersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+
+<#
+####################
+## Output Helpers ##
+####################
+#>
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
@@ -126,9 +142,6 @@ $windowsBuildToVersionMap = @{
 
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
 If ($releaseChannel) {
-    # Call in Get-OsVersionDefinitions
-    $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
-
     $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 
     If (!$targetBuild) {
@@ -279,9 +292,6 @@ If (!(Test-Path $downloadDir)) {
 ######################
 #>
 
-# Call in Registry-Helpers
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
-
 function Get-HashCheck {
     param ([string]$Path)
     $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
@@ -296,17 +306,11 @@ function Start-FileDownload {
     If ($isEnterprise) {
         $downloadUrl = "$enterpriseIsoUrl/Win_Ent_$targetBuild.iso"
     } Else {
-        # Call in Get-WindowsIsoUrl
-        (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
-
         $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win $windowsGeneration
         $downloadUrl = $fido.Link
     }
 
     $transfer = $Null
-
-    # Call in Get-IsDiskFull
-    (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 
     # Check total disk space, make sure there's at least 16GBs free. If there's not then run the disk cleanup script to see if we can get enough space.
     $diskCheck = Get-IsDiskFull -MinGb 16
@@ -341,9 +345,6 @@ function Start-FileDownload {
 
 This script should only execute if this machine is a desktop windows machine that is on a version less than the requested version
 #>
-
-# Call in Get-DesktopWindowsVersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild

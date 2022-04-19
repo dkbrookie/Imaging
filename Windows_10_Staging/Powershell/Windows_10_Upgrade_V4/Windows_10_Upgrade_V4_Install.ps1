@@ -4,6 +4,7 @@ $outputLog = @()
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 # TODO: (for future PR, not now) Mark reboot pending in EDF. Once reboot is pending, don't run download script anymore.
+# TODO: (NOW, when prod merge occurs) Rename EDF for 21H2 installationAttemptCount to "current build" and delete the others
 
 <#
 #############
@@ -26,13 +27,27 @@ Try {
 }
 
 <#
-####################
-## Output Helpers ##
-####################
+##########################
+## Call in Dependencies ##
+##########################
 #>
 
 # Call in Invoke-Output
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
+# Call in Get-OsVersionDefinitions
+$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+# Call in Registry-Helpers
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
+# Call in Get-DesktopWindowsVersionComparison
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+# Call in Get-LogonStatus
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
+
+<#
+####################
+## Output Helpers ##
+####################
+#>
 
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
@@ -126,9 +141,6 @@ $windowsBuildToVersionMap = @{
 
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
 If ($releaseChannel) {
-    # Call in Get-OsVersionDefinitions
-    $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
-
     $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 
     If (!$targetBuild) {
@@ -286,9 +298,6 @@ If (!(Test-Path $downloadDir)) {
 ######################
 #>
 
-# Call in Registry-Helpers
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
-
 function Get-HashCheck {
     param ([string]$Path)
     $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
@@ -340,9 +349,6 @@ function Read-PendingRebootStatus {
 
 This script should only execute if this machine is a windows 10 machine that is on a version less than the requested version
 #>
-
-# Call in Get-DesktopWindowsVersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 
 Try {
     $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
@@ -451,9 +457,6 @@ If (!(Get-HashCheck -Path $isoFilePath)) {
 # Check if user logged in #
 ###########################
 #>
-
-# Call in Get-LogonStatus
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
 
 $userLogonStatus = Get-LogonStatus
 
