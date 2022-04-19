@@ -254,7 +254,7 @@ $workDir = "$env:windir\LTSvc\packages\OS"
 $windowslogsDir = "$workDir\Windows-$targetBuild-Logs"
 $downloadDir = "$workDir\Windows\$targetBuild"
 $isoFilePath = "$downloadDir\$targetBuild.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
+$regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
@@ -613,6 +613,10 @@ Try {
         installationAttemptCount = $installationAttemptCount
     }
     Return
+}
+
+If (($windowsGeneration -eq '11') -and ($forceInstallWithUnsupportedHardware)) {
+    Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
 }
 
 $setupArgs = "/Auto Upgrade /NoReboot /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable"
