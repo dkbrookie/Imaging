@@ -50,7 +50,7 @@ function Get-ErrorMessage {
 
 # Determine target via release channel
 Try {
-  $targetWindowsBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+  $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
 } Catch {
   $outputLog += Get-ErrorMessage $_ 'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
@@ -67,9 +67,9 @@ Try {
 #>
 
 $workDir = "$env:windir\LTSvc\packages\OS"
-$downloadDir = "$workDir\Win10\$targetWindowsBuild"
-$isoFilePath = "$downloadDir\$targetWindowsBuild.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($targetWindowsBuild)_Upgrade"
+$downloadDir = "$workDir\Windows\$targetBuild"
+$isoFilePath = "$downloadDir\$targetBuild.iso"
+$regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
@@ -81,7 +81,7 @@ $winSetupExitCodeKey = 'WindowsSetupExitCode'
 #>
 
 Try {
-  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetWindowsBuild
+  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
   $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
@@ -92,7 +92,7 @@ Try {
   Return
 }
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetWindowsBuild
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If ($lessThanRequestedBuild.Result) {
   $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
 } Else {
@@ -222,7 +222,7 @@ If ($pendingReboot -and !$excludeFromReboot) {
   Invoke-Output $outputObject
   Return
 } ElseIf ($pendingReboot -and $excludeFromReboot) {
-    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetWindowsBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
+    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
 
     $outputObject.outputLog = $outputLog
     $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
