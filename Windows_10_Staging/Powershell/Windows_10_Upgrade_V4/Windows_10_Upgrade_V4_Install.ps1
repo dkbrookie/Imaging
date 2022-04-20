@@ -628,9 +628,9 @@ If (!$userIsLoggedOut) {
 }
 
 # We're running the installer here, so we can go ahead and increment $installationAttemptCount
-Write-Host "WRITING INSTALLATION ATTEMPT COUNT NOW, it is: $installationAttemptCount"
-Write-Host "AND IT IS TYPE: $($installationAttemptCount.GetType())"
-$installationAttemptCount++
+$outputLog += "WRITING INSTALLATION ATTEMPT COUNT NOW, it is: $installationAttemptCount"
+$outputLog += "AND IT IS TYPE: $($installationAttemptCount.GetType())"
+# $installationAttemptCount++
 Invoke-Output @{
     outputLog = $outputLog
     installationAttemptCount = $installationAttemptCount
