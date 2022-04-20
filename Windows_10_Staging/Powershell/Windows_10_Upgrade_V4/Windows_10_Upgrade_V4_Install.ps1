@@ -631,6 +631,10 @@ If (!$userIsLoggedOut) {
 Write-Host "WRITING INSTALLATION ATTEMPT COUNT NOW, it is: $installationAttemptCount"
 Write-Host "AND IT IS TYPE: $($installationAttemptCount.GetType())"
 $installationAttemptCount++
+Invoke-Output @{
+    outputLog = $outputLog
+    installationAttemptCount = $installationAttemptCount
+}
 Return
 
 Write-RegistryValue -Name $installationAttemptCountKey -Value $installationAttemptCount
