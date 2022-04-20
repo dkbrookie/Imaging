@@ -578,5 +578,4 @@ If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
     }
 
     Invoke-Output $outputLog
-    Return
 }
