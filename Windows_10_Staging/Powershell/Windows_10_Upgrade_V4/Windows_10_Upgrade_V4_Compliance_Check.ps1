@@ -1,9 +1,8 @@
 $outputLog = @()
 $outputObject = @{
-  outputLog = @()
+  outputLog           = @()
   nonComplianceReason = ''
-  compliant = '0'
-  targetWindowsBuild = ''
+  compliant           = '0'
 }
 
 If (!$releaseChannel) {
@@ -16,7 +15,8 @@ Try {
   # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
   [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
   $outputLog += "Successfully enabled TLS1.2 to ensure successful file downloads."
-} Catch {
+}
+Catch {
   $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
   # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
   $psVers = $PSVersionTable.PSVersion
@@ -51,9 +51,9 @@ function Get-ErrorMessage {
 
 # Determine target via release channel
 Try {
-  $targetWindowsBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
-  $outputObject.targetWindowsBuild = $targetWindowsBuild
-} Catch {
+  $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+}
+Catch {
   $outputLog += Get-ErrorMessage $_ 'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Not able to determine OS release channel for this machine. This must be manually assessed and corrected.'
@@ -69,9 +69,9 @@ Try {
 #>
 
 $workDir = "$env:windir\LTSvc\packages\OS"
-$downloadDir = "$workDir\Win10\$targetWindowsBuild"
-$isoFilePath = "$downloadDir\$targetWindowsBuild.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($targetWindowsBuild)_Upgrade"
+$downloadDir = "$workDir\Windows\$targetBuild"
+$isoFilePath = "$downloadDir\$targetBuild.iso"
+$regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
@@ -83,8 +83,9 @@ $winSetupExitCodeKey = 'WindowsSetupExitCode'
 #>
 
 Try {
-  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetWindowsBuild
-} Catch {
+  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
+}
+Catch {
   $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
   $outputObject.outputLog = $outputLog
@@ -94,10 +95,11 @@ Try {
   Return
 }
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetWindowsBuild
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If ($lessThanRequestedBuild.Result) {
   $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
-} Else {
+}
+Else {
   $outputLog += $lessThanRequestedBuild.Output -join '`n`n'
   $outputLog = "!Success: The requested windows build (or higher) is already installed!", $outputLog
 
@@ -113,7 +115,8 @@ If ($lessThanRequestedBuild.Result) {
 # This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
 Try {
   $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
+}
+Catch {
   $outputLog += Get-ErrorMessage $_ "There was an error in determining whether this is an Enterprise version of windows or not."
 
   $outputObject.outputLog = $outputLog
@@ -223,15 +226,17 @@ If ($pendingReboot -and !$excludeFromReboot) {
 
   Invoke-Output $outputObject
   Return
-} ElseIf ($pendingReboot -and $excludeFromReboot) {
-    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetWindowsBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
+}
+ElseIf ($pendingReboot -and $excludeFromReboot) {
+  $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
 
-    $outputObject.outputLog = $outputLog
-    $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
 
-    Invoke-Output $outputObject
-    Return
-} Else {
+  Invoke-Output $outputObject
+  Return
+}
+Else {
   $outputLog += "Verified there is no reboot pending"
 }
 
