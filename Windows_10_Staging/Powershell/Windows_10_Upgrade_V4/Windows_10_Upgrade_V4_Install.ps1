@@ -265,7 +265,8 @@ $WinSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
 $acceptableHashes = $hashArrays[$targetBuild]
 
-$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
+# This ends up a string instead of an integer if we don't cast it
+[Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
 
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
