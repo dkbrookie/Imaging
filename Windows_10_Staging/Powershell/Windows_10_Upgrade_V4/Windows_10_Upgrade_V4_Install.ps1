@@ -617,7 +617,13 @@ Try {
 }
 
 If (($windowsGeneration -eq '11') -and ($forceInstallOnUnsupportedHardware)) {
-    Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
+    $outputLog += '$forceInstallOnUnsupportedHardware was specified, so setting HKLM:\SYSTEM\Setup\MoSetup\AllowUpgradesWithUnsupportedTPMOrCPU to 1. This should avoid the installer erroring out due to TPM or CPU incompatibility.'
+
+    Try {
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
+    } Catch {
+        $outputLog += "There was a problem, could net set AllowUpgradesWithUnsupportedTPMOrCPU to 1. Installation will not succeed if hardware is not compatible."
+    }
 }
 
 $setupArgs = "/Auto Upgrade /NoReboot /Quiet /Compat IgnoreWarning /ShowOOBE None /Bitlocker AlwaysSuspend /DynamicUpdate Enable /ResizeRecoveryPartition Enable /copylogs $windowslogsDir /Telemetry Disable"
