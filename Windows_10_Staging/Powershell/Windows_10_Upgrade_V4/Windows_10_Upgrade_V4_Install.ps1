@@ -388,7 +388,7 @@ If ($lessThanRequestedBuild.Result) {
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
     $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
-    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should clear the value at $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
