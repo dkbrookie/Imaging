@@ -3,6 +3,7 @@ $outputObject = @{
   outputLog           = @()
   nonComplianceReason = ''
   compliant           = '0'
+  targetWindowsBuild  = ''
 }
 
 If (!$releaseChannel) {
@@ -52,8 +53,8 @@ function Get-ErrorMessage {
 # Determine target via release channel
 Try {
   $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
-}
-Catch {
+  $outputObject.targetWindowsBuild = $targetBuild
+} Catch {
   $outputLog += Get-ErrorMessage $_ 'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'Not able to determine OS release channel for this machine. This must be manually assessed and corrected.'
