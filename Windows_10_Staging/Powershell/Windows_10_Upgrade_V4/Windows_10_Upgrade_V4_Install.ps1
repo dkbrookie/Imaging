@@ -326,6 +326,9 @@ function Read-PendingRebootStatus {
     ## aren't running so they can be renamed.
     $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
 
+    # There may be a pending reboot from a previous version of this script that installed via version ID 20H2
+    $rbCheck4 = Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade'
+
     If ($rbCheck1) {
         $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
         $rebootChecks += $rbCheck1
@@ -341,6 +344,11 @@ function Read-PendingRebootStatus {
         $out += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
         $out = ($rbCheck3).PendingFileRenameOperations | Out-String
         $rebootChecks += $rbCheck3
+    }
+
+    If ($rbCheck4) {
+        $out += "Found a pending reboot for Win10 20H2"
+        $rebootChecks += $rbCheck4
     }
 
     Return @{
@@ -392,6 +400,18 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
     $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
+    Return
+}
+
+# There could also be an error at a location from a previous version of this script, identified by version ID 20H2
+If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError') {
+    $setupErr = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError'
+    $setupExitCode = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupExitCode'
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
+    Invoke-Output @{
+        outputLog                = $outputLog
         installationAttemptCount = $installationAttemptCount
     }
     Return
