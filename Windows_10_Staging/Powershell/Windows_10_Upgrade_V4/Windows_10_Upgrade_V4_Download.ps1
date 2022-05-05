@@ -514,6 +514,7 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
     $setupExitCode = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupExitCode'
     $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
     Invoke-Output $outputLog
+    Return
 }
 
 # Check that this upgrade hasn't already occurred. No need to download iso if installation has already occurred
