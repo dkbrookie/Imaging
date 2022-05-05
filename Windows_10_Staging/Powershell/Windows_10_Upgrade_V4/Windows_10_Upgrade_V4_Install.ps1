@@ -347,7 +347,7 @@ function Read-PendingRebootStatus {
     }
 
     If ($rbCheck4) {
-        $out += "Found a pending reboot for Win10 20H2"
+        $out += "Found a pending reboot for Win10 20H2."
         $rebootChecks += $rbCheck4
     }
 
@@ -397,7 +397,7 @@ If ($lessThanRequestedBuild.Result) {
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
     $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
-    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was '$setupErr'" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -409,7 +409,7 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
 If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError') {
     $setupErr = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError'
     $setupExitCode = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupExitCode'
-    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was $setupErr" + $outputLog
+    $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was '$setupErr'" + $outputLog
     Invoke-Output @{
         outputLog                = $outputLog
         installationAttemptCount = $installationAttemptCount

@@ -142,12 +142,47 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
   Return
 }
 
+# There could also be an error at a location from a previous version of this script, identified by version ID 20H2
+If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError') {
+  $setupErr = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError'
+  $setupExitCode = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupExitCode'
+
+  $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was '$setupErr'" + $outputLog
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = 'Windows setup experienced an error when attempting to install the new Windows build. This machine must be manually assessed.'
+
+  Invoke-Output $outputObject
+  Return
+}
+
 # Check that this upgrade hasn't already occurred
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
   $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'This machine has already been upgraded, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
+
+  Invoke-Output $outputObject
+  Return
+}
+
+# Check that this upgrade hasn't already occurred
+If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+  $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
+
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = 'This machine has already been upgraded, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
+
+  Invoke-Output $outputObject
+  Return
+}
+
+# Check that this upgrade hasn't already occurred from a previous version of this script
+If ((Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -eq 1)) {
+  $outputLog = "!Warning: This machine has been upgraded to 20H2 but is pending reboot via reg value at HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\PendingRebootForThisUpgrade. Exiting script.", $outputLog
+
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = 'This machine has been upgraded to Win10 20H2, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
 
   Invoke-Output $outputObject
   Return
