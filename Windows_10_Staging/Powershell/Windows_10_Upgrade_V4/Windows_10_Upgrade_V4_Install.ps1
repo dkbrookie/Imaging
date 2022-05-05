@@ -268,7 +268,7 @@ $acceptableHashes = $hashArrays[$targetBuild]
 # This ends up a string instead of an integer if we don't cast it
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
 
-If (!$installationAttemptCount) {
+If (!$installationAttemptCount -or ($installationAttemptCount -eq '@installationAttemptCount@')) {
     $installationAttemptCount = 0
 }
 
