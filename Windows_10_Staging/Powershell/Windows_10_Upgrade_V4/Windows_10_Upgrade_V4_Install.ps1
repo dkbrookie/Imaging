@@ -1,5 +1,8 @@
 $outputLog = @()
 
+# cast $targetBuild into a string just in case it's an int
+[string]$targetBuild = $targetBuild
+
 # TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
@@ -291,12 +294,13 @@ $downloadDir = "$workDir\Windows\$targetBuild"
 $isoFilePath = "$downloadDir\$targetBuild.iso"
 $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
+$rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
 $windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
-$WinSetupExitCodeKey = 'WindowsSetupExitCode'
+$winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
 $acceptableHashes = $hashArrays[$targetBuild]
 
@@ -431,7 +435,7 @@ If ($lessThanRequestedBuild.Result) {
 # We don't want windows setup to repeatedly try if the machine is having an issue
 If (Test-RegistryValue -Name $winSetupErrorKey) {
     $setupErr = Get-RegistryValue -Name $winSetupErrorKey
-    $setupExitCode = Get-RegistryValue -Name $WinSetupExitCodeKey
+    $setupExitCode = Get-RegistryValue -Name $winSetupExitCodeKey
     $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete $regPath\$winSetupErrorKey in order to make the script try again. The exit code was $setupExitCode and the error output was '$setupErr'" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
@@ -454,6 +458,17 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
 
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
 If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+
+    # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded so the installer must have errored out without
+    # actually throwing an error code? Let's set the error state for assessment.
+    If ((Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)) {
+        $failMsg = "Windows setup appears to have succeeded (it didn't throw an error) but windows didn't actually complete the upgrade for some reason. This machine needs to be manually assessed. If you want to try again, delete registry values at '$rebootInitiatedForThisUpgradeKey', '$pendingRebootForThisUpgradeKey' and '$winSetupErrorKey'"
+        $outputLog = "!Failure: $failMsg" + $outputLog
+        Write-RegistryValue -Name $winSetupErrorKey -Value $failMsg
+        Write-RegistryValue -Name $winSetupExitCodeKey -Value 'Unknown Error'
+        Return
+    }
+
     $userLogonStatus = Get-LogonStatus
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
@@ -462,6 +477,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
+        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
         Restart-Computer -Force
         Return
     } Else {
@@ -598,6 +614,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
+        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
         Restart-Computer -Force
         Return
     } Else {
@@ -704,7 +721,7 @@ If ($exitCode -ne 0) {
     $setupErr = $process.StandardError
     $convertedExitCode = '{0:x}' -f $exitCode
 
-    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: $convertedExitCode."
+    $outputLog += "Windows setup exited with a non-zero exit code. The exit code was: '$convertedExitCode'."
 
     If ($convertedExitCode -eq 'c1900200') {
         $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'. You may be able to force installation by setting `$forceInstallOnUnsupportedHardware to `$true."
@@ -718,7 +735,7 @@ If ($exitCode -ne 0) {
     $outputLog += "This machine needs to be manually assessed. Writing error to registry at $regPath\$winSetupErrorKey. Clear this key before trying again. The error was: $setupErr"
 
     Write-RegistryValue -Name $winSetupErrorKey -Value $setupErr
-    Write-RegistryValue -Name $WinSetupExitCodeKey -Value $convertedExitCode
+    Write-RegistryValue -Name $winSetupExitCodeKey -Value $convertedExitCode
     Dismount-DiskImage $isoFilePath | Out-Null
 } Else {
     $outputLog += "Windows setup completed successfully."
@@ -732,6 +749,7 @@ If ($exitCode -ne 0) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
+        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
         Restart-Computer -Force
         Return
     } ElseIf ($excludeFromReboot) {
