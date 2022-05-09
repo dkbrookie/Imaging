@@ -1,5 +1,8 @@
 $outputLog = @()
 
+# cast $targetBuild into a string just in case it's an int
+[string]$targetBuild = $targetBuild
+
 # TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
