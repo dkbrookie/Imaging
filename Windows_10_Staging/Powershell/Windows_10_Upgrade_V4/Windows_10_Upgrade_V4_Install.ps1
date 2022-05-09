@@ -72,14 +72,20 @@ OR you can specify $targetVersion (i.e '20H2') PLUS $windowsGeneration (i.e. '10
 # If none of the options are specified
 If (!$releaseChannel -and !$targetBuild -and (!$targetVersion -or !$windowsGeneration)) {
     $outputLog = "!Error: No Release Channel was defined! Please define the `$releaseChannel variable to 'GA', 'Beta' or 'Alpha' and then run this again! Alternatively, you can provide `$targetBuild (i.e. '19041') or you can provide `$targetVersion (i.e. '20H2') AND `$windowsGeneration (i.e. '10' or '11')." + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
 # If both $releaseChannel and $targetBuild are specified
 If ($releaseChannel -and $targetBuild) {
     $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and `$targetBuild of '$targetBuild' were both specified. You should specify only one of these." + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -92,7 +98,10 @@ If ($releaseChannel -and ($targetVersion -or $windowsGeneration)) {
     }
 
     $outputLog = "!Error: `$releaseChannel of '$releaseChannel' and $msg were both specified. You should specify only one of these." + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -105,7 +114,10 @@ If ($targetBuild -and ($targetVersion -or $windowsGeneration)) {
     }
 
     $outputLog = "!Error: `$targetBuild of '$targetBuild' and $msg were both specified. You should specify only one of these." + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -120,7 +132,10 @@ If (($targetVersion -and !$windowsGeneration) -or (!$targetVersion -and $windows
     }
 
     $outputLog = "!Error: $specified was specified but $notSpecified was not specified. You must provide both." + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -145,7 +160,10 @@ If ($releaseChannel) {
 
     If (!$targetBuild) {
         $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository." + $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
         Return
     }
 
@@ -162,7 +180,10 @@ If ($releaseChannel) {
         # If neither, that'd be an error state. Only windows 10 and 11 are supported
     } Else {
         $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'." + $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
         Return
     }
 
@@ -179,7 +200,10 @@ If ($targetBuild) {
         $windowsGeneration = '11'
     } Else {
         $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!" + $outputLog
-        Invoke-Output $outputLog
+        Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
         Return
     }
 
@@ -187,7 +211,10 @@ If ($targetBuild) {
 
     If (!$targetVersion) {
         $outputLog += "No value for `$targetVersion could be determined from `$targetBuild. This script needs to be updated to handle $targetBuild! Please update script!"
-        Invoke-Output $outputLog
+        Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
         Return
     }
 }
@@ -202,7 +229,10 @@ $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
     $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!" + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
@@ -211,14 +241,20 @@ Try {
     $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
 } Catch {
     $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
 # Make sure a URL has been defined for the Win ISO on Enterprise versions
 If ($isEnterprise -and !$enterpriseIsoUrl) {
     $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
-    Invoke-Output $outputLog
+    Invoke-Output @{
+        outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
     Return
 }
 
