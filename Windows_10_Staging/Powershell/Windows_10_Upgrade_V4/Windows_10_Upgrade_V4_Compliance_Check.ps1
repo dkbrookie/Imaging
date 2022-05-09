@@ -1,8 +1,9 @@
 $outputLog = @()
 $outputObject = @{
-  outputLog = @()
+  outputLog           = @()
   nonComplianceReason = ''
-  compliant = '0'
+  compliant           = '0'
+  targetWindowsBuild  = ''
 }
 
 If (!$releaseChannel) {
@@ -49,7 +50,8 @@ function Get-ErrorMessage {
 
 # Determine target via release channel
 Try {
-  $targetWindowsBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+  $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
+  $outputObject.targetWindowsBuild = $targetBuild
 } Catch {
   $outputLog += Get-ErrorMessage $_ 'Function Get-OsVersionDefinitions errored out for some reason.'
   $outputObject.outputLog = $outputLog
@@ -59,6 +61,32 @@ Try {
   Return
 }
 
+If ($isEnterprise) {
+  $hashArrays = @{
+    '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
+    '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
+    '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
+    '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
+  }
+}
+Else {
+  $hashArrays = @{
+    '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
+    '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
+    '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
+    '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F')
+  }
+}
+
+$acceptableHashes = $hashArrays[$targetBuild]
+
+function Get-HashCheck {
+  param ([string]$Path)
+  $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
+  $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
+  Return $hashMatches.length -gt 0
+}
+
 <#
 ######################
 ## Define Constants ##
@@ -66,9 +94,9 @@ Try {
 #>
 
 $workDir = "$env:windir\LTSvc\packages\OS"
-$downloadDir = "$workDir\Win10\$targetWindowsBuild"
-$isoFilePath = "$downloadDir\$targetWindowsBuild.iso"
-$regPath = "HKLM:\\SOFTWARE\LabTech\Service\Win10_$($targetWindowsBuild)_Upgrade"
+$downloadDir = "$workDir\Windows\$targetBuild"
+$isoFilePath = "$downloadDir\$targetBuild.iso"
+$regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
@@ -80,8 +108,9 @@ $winSetupExitCodeKey = 'WindowsSetupExitCode'
 #>
 
 Try {
-  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetWindowsBuild
-} Catch {
+  $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
+}
+Catch {
   $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
   $outputObject.outputLog = $outputLog
@@ -91,10 +120,11 @@ Try {
   Return
 }
 
-# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetWindowsBuild
+# $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If ($lessThanRequestedBuild.Result) {
   $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
-} Else {
+}
+Else {
   $outputLog += $lessThanRequestedBuild.Output -join '`n`n'
   $outputLog = "!Success: The requested windows build (or higher) is already installed!", $outputLog
 
@@ -110,7 +140,8 @@ If ($lessThanRequestedBuild.Result) {
 # This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
 Try {
   $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
+}
+Catch {
   $outputLog += Get-ErrorMessage $_ "There was an error in determining whether this is an Enterprise version of windows or not."
 
   $outputObject.outputLog = $outputLog
@@ -255,15 +286,17 @@ If ($pendingReboot -and !$excludeFromReboot) {
 
   Invoke-Output $outputObject
   Return
-} ElseIf ($pendingReboot -and $excludeFromReboot) {
-    $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetWindowsBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
+}
+ElseIf ($pendingReboot -and $excludeFromReboot) {
+  $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
 
-    $outputObject.outputLog = $outputLog
-    $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
 
-    Invoke-Output $outputObject
-    Return
-} Else {
+  Invoke-Output $outputObject
+  Return
+}
+Else {
   $outputLog += "Verified there is no reboot pending"
 }
 
