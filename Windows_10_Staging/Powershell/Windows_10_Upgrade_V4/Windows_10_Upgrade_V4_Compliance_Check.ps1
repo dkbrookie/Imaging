@@ -97,6 +97,7 @@ $workDir = "$env:windir\LTSvc\packages\OS"
 $downloadDir = "$workDir\Windows\$targetBuild"
 $isoFilePath = "$downloadDir\$targetBuild.iso"
 $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
+$rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
@@ -109,8 +110,7 @@ $winSetupExitCodeKey = 'WindowsSetupExitCode'
 
 Try {
   $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
-}
-Catch {
+} Catch {
   $outputLog += Get-ErrorMessage $_ "There was an issue when comparing the current version of windows to the requested one."
 
   $outputObject.outputLog = $outputLog
@@ -123,8 +123,7 @@ Catch {
 # $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
 If ($lessThanRequestedBuild.Result) {
   $outputLog += "Checked current version of windows. " + $lessThanRequestedBuild.Output
-}
-Else {
+} Else {
   $outputLog += $lessThanRequestedBuild.Output -join '`n`n'
   $outputLog = "!Success: The requested windows build (or higher) is already installed!", $outputLog
 
@@ -150,9 +149,10 @@ If (Test-RegistryValue -Name $winSetupErrorKey) {
 }
 
 # There could also be an error at a location from a previous version of this script, identified by version ID 20H2
-If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError') {
-  $setupErr = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupError'
-  $setupExitCode = Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'WindowsSetupExitCode'
+$previousRegPath = 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
+If (Test-RegistryValue -Path $previousRegPath -Name 'WindowsSetupError') {
+  $setupErr = Get-RegistryValue -Path $previousRegPath -Name 'WindowsSetupError'
+  $setupExitCode = Get-RegistryValue -Path $previousRegPath -Name 'WindowsSetupExitCode'
 
   $outputLog = "!Error: Windows setup experienced an error upon last installation. This should be manually assessed and you should delete HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\WindowsSetupError in order to make the script try again. The exit code was $setupExitCode and the error output was '$setupErr'" + $outputLog
   $outputObject.outputLog = $outputLog
@@ -162,19 +162,29 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
   Return
 }
 
-# Check that this upgrade hasn't already occurred
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-  $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
+# The reboot could have already occurred
+$rebootInitiatedForThisUpgrade = (Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)
+
+If ($rebootInitiatedForThisUpgrade) {
+  # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded, so the installer must have errored out without
+  # actually throwing an error code? Let's set the error state for assessment.
+  $failMsg = "Windows setup appears to have succeeded (it didn't throw an error) but windows didn't actually complete the upgrade for some reason. This machine needs to be manually assessed. If you want to try again, delete registry values at '$rebootInitiatedForThisUpgradeKey', '$pendingRebootForThisUpgradeKey' and '$winSetupErrorKey'"
+  $outputLog = "!Failure: $failMsg" + $outputLog
+
+  Write-RegistryValue -Name $winSetupErrorKey -Value $failMsg
+  Write-RegistryValue -Name $winSetupExitCodeKey -Value 'Unknown Error'
 
   $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'This machine has already been upgraded, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
+  $outputObject.nonComplianceReason = $failMsg
 
   Invoke-Output $outputObject
   Return
 }
 
-# Check that this upgrade hasn't already occurred
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+# Are we waiting on a pending reboot?
+$pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
+
+If ($pendingRebootForThisUpgrade) {
   $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
@@ -185,7 +195,9 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
 }
 
 # Check that this upgrade hasn't already occurred from a previous version of this script
-If ((Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -eq 1)) {
+$pendingRebootForPreviousScript = (Test-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -eq 1)
+
+If ($pendingRebootForPreviousScript) {
   $outputLog = "!Warning: This machine has been upgraded to 20H2 but is pending reboot via reg value at HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\PendingRebootForThisUpgrade. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
@@ -206,7 +218,7 @@ If (!(Test-Path -Path $isoFilePath)) {
   $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'Still waiting on Windows ISO to download completely.'
+  $outputObject.nonComplianceReason = 'Still waiting on Windows installer to download.'
 
   Invoke-Output $outputObject
   Return
@@ -223,7 +235,7 @@ If (!(Get-HashCheck -Path $isoFilePath)) {
   $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!", $outputLog
 
   $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'The Windows ISO was downloaded, but it does not appear to be the correct file. It was either corrupted during download, or a new ISO was released by Microsoft that we were are unaware of. This needs to be manually assessed and corrected.'
+  $outputObject.nonComplianceReason = 'The Windows installer was downloaded, but it does not appear to be the file we were expecting. It was probably either corrupted during download, or a new ISO was released that we are unaware of. This needs to be manually assessed and corrected.'
 
   Invoke-Output $outputObject
   Return
@@ -259,7 +271,7 @@ If ($pendingReboot -and !$excludeFromReboot) {
   $outputLog += $pendingRebootCheck.Output
 
   $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system, so Windows setup cannot run. This machine needs to be rebooted, or Windows installer is experiencing an issue.'
+  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system, so Windows setup cannot run. Either this machine needs to be rebooted, or Windows installer is experiencing an issue.'
 
   Invoke-Output $outputObject
   Return
@@ -268,7 +280,7 @@ ElseIf ($pendingReboot -and $excludeFromReboot) {
   $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)", $outputLog
 
   $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot try to reboot. Please reboot this machine.'
+  $outputObject.nonComplianceReason = 'There are existing pending reboots on this system so Windows setup cannot run. This machine has been excluded from automatic reboots, so cannot reboot. Please reboot this machine.'
 
   Invoke-Output $outputObject
   Return
@@ -297,10 +309,10 @@ If (Get-IsOnBattery) {
 
 # Here we landed where the downloader has run twice and the ISO has finished downloading, but the install script hasn't run yet.
 # Just give this machine some time
-$outputLog += 'This machine is currently in progress. Give this machine a few days and check back.'
+$outputLog += 'This machine is currently in progress. Give this machine a few days and check back. Please ensure the machine is online.'
 
 $outputObject.outputLog = $outputLog
-$outputObject.nonComplianceReason = 'This machine is currently in progress. Give this machine a few days and check back.'
+$outputObject.nonComplianceReason = 'This machine is currently in progress. Give this machine a few days and check back. Please ensure the machine is online.'
 
 Invoke-Output $outputObject
 Return
