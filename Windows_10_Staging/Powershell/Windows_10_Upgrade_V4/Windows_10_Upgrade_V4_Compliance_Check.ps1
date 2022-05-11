@@ -136,29 +136,6 @@ Else {
   Return
 }
 
-# Check to see if machine is Enterprise
-# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
-Try {
-  $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-}
-Catch {
-  $outputLog += Get-ErrorMessage $_ "There was an error in determining whether this is an Enterprise version of windows or not."
-
-  $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'Not able to determine Windows Edition. There may be an issue with this machine and it must be manually assessed.'
-
-  Invoke-Output $outputObject
-  Return
-}
-
-If ($isEnterprise) {
-  $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'Enterprise versions of Windows are not currently supported by automated build upgrades. This capability is coming soon.'
-
-  Invoke-Output $outputObject
-  Return
-}
-
 # Windows setup may have thrown an error
 If (Test-RegistryValue -Name $winSetupErrorKey) {
   $setupErr = Get-RegistryValue -Name $winSetupErrorKey
