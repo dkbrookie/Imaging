@@ -181,27 +181,16 @@ If ($rebootInitiatedForThisUpgrade) {
   Return
 }
 
-# Are we waiting on a pending reboot?
+# Are we pending reboot?
 $pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
+$pendingRebootForPreviousScript = (Test-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -eq 1)
 
-If ($pendingRebootForThisUpgrade) {
+# If pending reboot for this upgrade, OR pending reboot for 20H2 and target is 19042 (which are the same)
+If ($pendingRebootForThisUpgrade -or ($pendingRebootForPreviousScript -and ($targetBuild -eq '19042'))) {
   $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'This machine has already been upgraded, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
-
-  Invoke-Output $outputObject
-  Return
-}
-
-# Check that this upgrade hasn't already occurred from a previous version of this script
-$pendingRebootForPreviousScript = (Test-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -eq 1)
-
-If ($pendingRebootForPreviousScript) {
-  $outputLog = "!Warning: This machine has been upgraded to 20H2 but is pending reboot via reg value at HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade\PendingRebootForThisUpgrade. Exiting script.", $outputLog
-
-  $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = 'This machine has been upgraded to Win10 20H2, but it is pending reboot. Reboot this machine to finish installation. Installation usually only takes 5-7 minutes.'
 
   Invoke-Output $outputObject
   Return

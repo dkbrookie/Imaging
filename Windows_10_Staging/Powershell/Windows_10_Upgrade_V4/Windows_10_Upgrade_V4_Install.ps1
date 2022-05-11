@@ -260,6 +260,9 @@ If ($isEnterprise -and !$enterpriseIsoUrl) {
     Return
 }
 
+# Is there a pending reboot flag from a previous version of this script?
+$pendingRebootPreviousVersion = Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade'
+
 <#
 ########################
 ## Define File Hashes ##
@@ -363,10 +366,10 @@ function Read-PendingRebootStatus {
     ## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
     ## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
     ## aren't running so they can be renamed.
-    $rbCheck3 = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA 0
+    $rbCheck3 = Test-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations
 
-    # There may be a pending reboot from a previous version of this script that installed via version ID 20H2
-    $rbCheck4 = Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade'
+    # There may be a pending reboot for 20H2 and if target is 19042 (which are the same) that's applicable here too
+    $rbCheck4 = (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -and ($targetBuild -eq '19042')
 
     If ($rbCheck1) {
         $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
