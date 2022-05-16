@@ -705,7 +705,7 @@ $setupArgs = "/Auto Upgrade /NoReboot /Quiet /Compat IgnoreWarning /ShowOOBE Non
 
 # If a user is logged in, we want setup to run with low priority and without forced reboot
 If (!$userIsLoggedOut) {
-    $outputLog += "A user is logged in upon starting setup. Will not allow reboot, but will continue."
+    $outputLog += "A user is logged in upon starting setup. Will reassess after installation finishes."
     $setupArgs = $setupArgs + " /Priority Low"
 }
 
