@@ -221,6 +221,8 @@ If ($targetBuild) {
     }
 }
 
+$restartMessage = "Restarting to complete Windows $windowsGeneration $targetVersion - $targetBuild upgrade"
+
 <#
 ########################
 ## Environment Checks ##
@@ -481,7 +483,7 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
             installationAttemptCount = $installationAttemptCount
         }
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        Restart-Computer -Force
+        shutdown /r /c $restartMessage
         Return
     } Else {
         If ($excludeFromReboot) {
@@ -618,7 +620,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
             installationAttemptCount = $installationAttemptCount
         }
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        Restart-Computer -Force
+        shutdown /r /c $restartMessage
         Return
     } Else {
         $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later." + $outputLog
@@ -753,7 +755,7 @@ If ($exitCode -ne 0) {
             installationAttemptCount = $installationAttemptCount
         }
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        Restart-Computer -Force
+        shutdown /r /c $restartMessage
         Return
     } ElseIf ($excludeFromReboot) {
         $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry." + $outputLog
