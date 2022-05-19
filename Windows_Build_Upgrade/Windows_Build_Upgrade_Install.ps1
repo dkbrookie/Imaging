@@ -619,7 +619,6 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
-        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
         shutdown /r /c $restartMessage
         Return
     } Else {
