@@ -78,7 +78,12 @@ Else {
   }
 }
 
-$acceptableHashes = $hashArrays[$targetBuild]
+Try {
+  $acceptableHashes = $hashArrays[$targetBuild]
+} Catch {
+  $outputLog = "`$targetBuild of '$targetBuild' is not compatible with array of ISO hashes defined in script. Please check script."
+}
+
 
 function Get-HashCheck {
   param ([string]$Path)
