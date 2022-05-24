@@ -4,6 +4,7 @@ $outputObject = @{
   nonComplianceReason = ''
   compliant           = '0'
   targetWindowsBuild  = ''
+  currentWindowsBuild = ''
 }
 
 If (!$releaseChannel) {
@@ -47,6 +48,9 @@ function Get-ErrorMessage {
 
 # Call in Get-PendingReboot
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-PendingReboot.ps1') | Invoke-Expression
+
+# Call in Get-WindowsVersion
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsVersion.ps1') | Invoke-Expression
 
 # Determine target via release channel
 Try {
@@ -113,6 +117,7 @@ $winSetupExitCodeKey = 'WindowsSetupExitCode'
 ######################
 #>
 
+# Check current build against target
 Try {
   $lessThanRequestedBuild = Get-DesktopWindowsVersionComparison -LessThan $targetBuild
 } Catch {
@@ -123,6 +128,14 @@ Try {
 
   Invoke-Output $outputObject
   Return
+}
+
+# Grab current build for output/logging purposes
+Try {
+  $currentBuild = (Get-WindowsVersion).Build
+  $outputObject.currentWindowsBuild = $currentBuild
+} Catch {
+  $outputLog += "Ran into an issue when attempting to get current build. Continuing as this value is only for informational purposes. The error was: $_"
 }
 
 # $lessThanRequestedBuild.Result will be $true if current version is -LessThan $targetBuild
