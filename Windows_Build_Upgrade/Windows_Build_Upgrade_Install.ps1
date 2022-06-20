@@ -1,8 +1,5 @@
 $outputLog = @()
 
-# cast $targetBuild into a string just in case it's an int
-[string]$targetBuild = $targetBuild
-
 # TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
@@ -54,6 +51,30 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 function Get-ErrorMessage {
     param ($Err, [string]$Message)
     Return "$Message Error was: $($Err.Exception.Message)"
+}
+
+<#
+##################################################
+## Ensure some values are the correct data type ##
+##################################################
+#>
+
+Try {
+    # cast $targetBuild into a string just in case it's an int, we need to do some string operations later
+    [string]$targetBuild = $targetBuild
+} Catch {
+    $outputLog += "Could not cast `$targetBuild of '$targetBuild' into a string. Error was: $_"
+    Invoke-Output $outputLog
+    Return
+}
+
+Try {
+    # cast $excludeFromReboot into an int just in case it's a string, we need to check it as a bool later, so we don't want a string
+    [int]$excludeFromReboot = $excludeFromReboot
+} Catch {
+    $outputLog += "Could not cast `$excludeFromReboot of '$excludeFromReboot' into an integer. Error was: $_"
+    Invoke-Output $outputLog
+    Return
 }
 
 <#
