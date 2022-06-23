@@ -505,16 +505,18 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                 }
 
                 Default {
-                    $errorForReg = $jobState
                     $description = $transfer.ErrorDescription
+                    $msg = "The ISO transfer job has entered an unexpected state of '$jobState' and the script can't continue. This machine should be checked out manually."
 
                     If ($description) {
-                        $errorForReg += " $description"
+                        $msg += " Error Description: $description"
                         Write-RegistryValue -Name $downloadErrorKey $description
+                    } Else {
+                        Write-RegistryValue -Name $downloadErrorKey $msg
                     }
 
                     # Not retrying as we want this machine to stand out so we can assess
-                    $outputLog = "!Error: The transfer job has entered an unexpected state and the script can't continue. This machine should be checked out manually. Remove the existing job and assess the reason. Check the job with JobId '$jobId'. Exiting Script. The status message is: $errorForReg" + $outputLog
+                    $outputLog = "!Error: $msg Remove the existing job and assess the reason. Check the job with JobId '$jobId'. Exiting Script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
