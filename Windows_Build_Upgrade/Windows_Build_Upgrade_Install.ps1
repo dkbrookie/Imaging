@@ -183,9 +183,9 @@ If ($releaseChannel) {
     } Else {
         $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'." + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
@@ -203,9 +203,9 @@ If ($targetBuild) {
     } Else {
         $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!" + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
@@ -214,9 +214,9 @@ If ($targetBuild) {
     If (!$targetVersion) {
         $outputLog += "No value for `$targetVersion could be determined from `$targetBuild. This script needs to be updated to handle $targetBuild! Please update script!"
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 }
