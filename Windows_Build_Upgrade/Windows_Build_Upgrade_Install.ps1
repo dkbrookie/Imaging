@@ -163,9 +163,9 @@ If ($releaseChannel) {
     If (!$targetBuild) {
         $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository." + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
