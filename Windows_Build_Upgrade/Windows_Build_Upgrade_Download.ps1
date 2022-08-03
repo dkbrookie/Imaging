@@ -3,10 +3,10 @@ $outputLog = @()
 # cast $targetBuild into a string just in case it's an int
 [string]$targetBuild = $targetBuild
 
-# TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 # TODO: (for future PR, not now) Mark reboot pending in EDF. Once reboot is pending, don't run download script anymore.
+# TODO: (for future PR, not now) create ticket or take some other action when error state is unknown and won't retry
 
 <#
 #############
@@ -238,6 +238,7 @@ $isoFilePath = "$downloadDir\$targetBuild.iso"
 $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
+$downloadErrorKey = 'BitsTransferError'
 $jobIdKey = "JobId"
 
 <#
@@ -427,6 +428,24 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                     Return
                 }
 
+                'Error' {
+                    $description = $transfer.ErrorDescription
+                    Write-RegistryValue -Name $downloadErrorKey $description
+
+                    If ($description -like '*Range protocol*') {
+                        # We know this error and unfortunately, it can be environment specific as firewalls are capable of stripping the 'Content-Range' header
+                        # which is required for bitstransfer to work. Windows won't auto-retry this one but it should, so let's force a retry
+                        $outputLog = "!Warning: The Transfer has entered an error state. We know this error and unfortunately, it can be environment specific (subject to change) as firewalls are capable of stripping the 'Content-Range' header which is required for bitstransfer to work. Retrying." + $outputLog
+                        $transfer | Remove-BitsTransfer | Out-Null
+                        Remove-RegistryValue -Name $jobIdKey
+                    } Else {
+                        # Not retrying as we want this machine to stand out so we can assess
+                        $outputLog = "!Error: The transfer job has experienced and unknown error and the script can't continue. This machine should be checked out manually. Remove the existing job and assess the reason. Check the job with JobId '$jobId'. Exiting Script. The error description is: $description" + $outputLog
+                        Invoke-Output $outputLog
+                        Return
+                    }
+                }
+
                 # ...or that transfer is suspended
                 'Suspended' {
                     $outputLog += "Windows $targetBuild is still transferring, but the transfer is suspended. Attempting to resume."
@@ -475,6 +494,8 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                     } Else {
                         $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry, changing LastWriteTime to NOW (so that disk cleanup doesn't delete it), and exiting Script!" + $outputLog
                         Remove-RegistryValue -Name $jobIdKey
+                        # We can remove any download errors we experienced along the way as they aren't important anymore
+                        Remove-RegistryValue -Name $downloadErrorKey
                         # Change the LastWriteTime to now b/c otherwise, the disk cleanup script will wipe it out
                         (Get-Item -Path $isoFilePath).LastWriteTime = Get-Date
                     }
@@ -484,7 +505,18 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
                 }
 
                 Default {
-                    $outputLog = "!Error: The transfer job has entered an unexpected state of $($jobState) and the script can't continue. On this machine, check the job with JobId $jobId. Exiting Script." + $outputLog
+                    $description = $transfer.ErrorDescription
+                    $msg = "The ISO transfer job has entered an unexpected state of '$jobState' and the script can't continue. This machine should be checked out manually."
+
+                    If ($description) {
+                        $msg += " Error Description: $description"
+                        Write-RegistryValue -Name $downloadErrorKey $description
+                    } Else {
+                        Write-RegistryValue -Name $downloadErrorKey $msg
+                    }
+
+                    # Not retrying as we want this machine to stand out so we can assess
+                    $outputLog = "!Error: $msg Remove the existing job and assess the reason. Check the job with JobId '$jobId'. Exiting Script." + $outputLog
                     Invoke-Output $outputLog
                     Return
                 }
