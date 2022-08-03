@@ -110,6 +110,7 @@ $rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
+$downloadErrorKey = 'BitsTransferError'
 
 <#
 ######################
@@ -148,6 +149,25 @@ If ($lessThanRequestedBuild.Result) {
   $outputObject.compliant = '1'
   $outputObject.nonComplianceReason = ''
   $outputObject.outputLog = $outputLog
+
+  Invoke-Output $outputObject
+  Return
+}
+
+If (Test-RegistryValue -Name $downloadErrorKey) {
+  $errorDescription = Get-RegistryValue -Name $downloadErrorKey
+
+  $msg = 'ISO downloader has experienced an error. This '
+
+  If ($errorDescription -like '*Range protocol*') {
+    $msg += "is a known error and the script will automatically retry. This machine is likely behind a firewall or proxy that is stripping the 'Content-Range' header. Move this machine to a different network OR adjust firewall/proxy config to leave this header intact."
+  } Else {
+    $msg += "machine should be manually assessed. The transfer error is: $errorDescription"
+  }
+
+  $outputLog = "!Error: $msg", $outputLog
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = $msg
 
   Invoke-Output $outputObject
   Return

@@ -3,11 +3,11 @@ $outputLog = @()
 # cast $targetBuild into a string just in case it's an int
 [string]$targetBuild = $targetBuild
 
-# TODO: (for future PR, not now) Research/test what happens when a machine is still pending reboot for 20H2 and then you try to install 21H1.
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 # TODO: (for future PR, not now) Mark reboot pending in EDF. Once reboot is pending, don't run download script anymore.
 # TODO: (NOW, when prod merge occurs) Rename EDF for 21H2 installationAttemptCount to "current build" and delete the others
+# TODO: (for future PR, not now) create ticket or take some other action when error state is unknown and won't retry
 
 <#
 #############
@@ -163,9 +163,9 @@ If ($releaseChannel) {
     If (!$targetBuild) {
         $outputLog = "!Error: Target Build was not found! Please check the provided `$releaseChannel of $releaseChannel against the valid release channels in Get-OsVersionDefinitions in the Constants repository." + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
@@ -183,9 +183,9 @@ If ($releaseChannel) {
     } Else {
         $outputLog = "!Error: An unsupported `$windowsGeneration value of $windowsGeneration was provided. Please choose either '10' or '11'." + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
@@ -203,9 +203,9 @@ If ($targetBuild) {
     } Else {
         $outputLog = "!Error: There was a problem with the script. `$targetBuild of $targetBuild does not appear to be supported. Please update script!" + $outputLog
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 
@@ -214,9 +214,9 @@ If ($targetBuild) {
     If (!$targetVersion) {
         $outputLog += "No value for `$targetVersion could be determined from `$targetBuild. This script needs to be updated to handle $targetBuild! Please update script!"
         Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
+            outputLog = $outputLog
+            installationAttemptCount = $installationAttemptCount
+        }
         Return
     }
 }
