@@ -57,6 +57,30 @@ function Get-ErrorMessage {
 }
 
 <#
+##################################################
+## Ensure some values are the correct data type ##
+##################################################
+#>
+
+Try {
+    # cast $targetBuild into a string just in case it's an int, we need to do some string operations later
+    [string]$targetBuild = $targetBuild
+} Catch {
+    $outputLog += "Could not cast `$targetBuild of '$targetBuild' into a string. Error was: $_"
+    Invoke-Output $outputLog
+    Return
+}
+
+Try {
+    # cast $excludeFromReboot into an int just in case it's a string, we need to check it as a bool later, so we don't want a string
+    [int]$excludeFromReboot = $excludeFromReboot
+} Catch {
+    $outputLog += "Could not cast `$excludeFromReboot of '$excludeFromReboot' into an integer. Error was: $_"
+    Invoke-Output $outputLog
+    Return
+}
+
+<#
 ######################
 ## Check for intent ##
 ######################
