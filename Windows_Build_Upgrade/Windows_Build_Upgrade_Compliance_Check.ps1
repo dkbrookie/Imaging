@@ -52,6 +52,35 @@ function Get-ErrorMessage {
 # Call in Get-WindowsVersion
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsVersion.ps1') | Invoke-Expression
 
+<#
+########################
+## Environment Checks ##
+########################
+#>
+
+$Is64 = [Environment]::Is64BitOperatingSystem
+
+If (!$Is64) {
+  $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!" + $outputLog
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = "This does not appear to be a 64 bit operating system and only 64 bit operating systems are supported. Please upgrade this machine to Windows build $targetBuild manually."
+
+  Invoke-Output $outputObject
+  Return
+}
+
+# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
+Try {
+  $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
+} Catch {
+  $outputLog += Get-ErrorMessage $_ "There was an error in determining whether this is an Enterprise version of windows or not."
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = "Could not determine if this is an Enterprise Windows version or not. There may be an issue with Powershell or WMI."
+
+  Invoke-Output $outputObject
+  Return
+}
+
 # Determine target via release channel
 Try {
   $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
