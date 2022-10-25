@@ -37,8 +37,9 @@ Try {
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-Output.ps1') | Invoke-Expression
 # Call in Get-OsVersionDefinitions
 $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
+# TODO: switch this to master branch after it is merged
 # Call in Registry-Helpers
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Add-RegKeyLastWriteTime/Function.Registry-Helpers.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 # Call in Get-WindowsIsoUrlByBuild.ps1
@@ -470,12 +471,35 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
     Return
 }
 
+$pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
+$rebootInitiatedForThisUpgrade = (Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)
+
+# If either reboot is pending for this upgrade, OR reboot has been initiated for this upgrade, check to make sure a reboot hasn't actually happened more recently
+If ($pendingRebootForThisUpgrade -or $rebootInitiatedForThisUpgrade) {
+    # If either of these is true but a reboot has occurred at least a day after this value was set, we're in a weird state where windows did fail to install
+    # but didn't throw an error and we want to reset the machine to try the upgrade again
+    $lastBootUpTime = (Get-WmiObject Win32_OperatingSystem | Select-Object @{LABEL = 'LastBootUpTime'; EXPRESSION = { $_.ConvertToDateTime($_.LastBootUpTime) } }).LastBootUpTime
+    $regPathLastModified = (Add-RegKeyLastWriteTime -Path $regPath).LastWriteTime
+    $daysBetweenModifiedAndBoot = [math]::Ceiling(($lastBootUpTime - $regPathLastModified).TotalDays)
+
+    # If the reg path was modified before the most recent boot and they were at least a day apart
+    If ($regPathLastModified -lt $lastBootUpTime -and $daysBetweenModifiedAndBoot -gt 0) {
+        # Obviously we have rebooted since this happened, but we're still not upgraded... clean up the registry so that the installation script will try again
+        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 0
+        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 0
+
+        # And then clean up their values for this script run
+        $pendingRebootForThisUpgrade = $False
+        $rebootInitiatedForThisUpgrade = $False
+    }
+}
+
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+If ($pendingRebootForThisUpgrade) {
 
     # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded so the installer must have errored out without
     # actually throwing an error code? Let's set the error state for assessment.
-    If ((Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)) {
+    If ($rebootInitiatedForThisUpgrade) {
         $failMsg = "Windows setup appears to have succeeded (it didn't throw an error) but windows didn't actually complete the upgrade for some reason. This machine needs to be manually assessed. If you want to try again, delete registry values at '$rebootInitiatedForThisUpgradeKey', '$pendingRebootForThisUpgradeKey' and '$winSetupErrorKey'"
         $outputLog = "!Failure: $failMsg" + $outputLog
         Write-RegistryValue -Name $winSetupErrorKey -Value $failMsg
