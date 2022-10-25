@@ -332,13 +332,19 @@ $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
+$retryInstallFailedWithoutErrorCountKey = 'RetryInstallFailedWithoutErrorCountKey'
 $acceptableHashes = $hashArrays[$targetBuild]
 
-# This ends up a string instead of an integer if we don't cast it
+# This ends up strings instead of integers if we don't cast them
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
+[Int32]$retryInstallFailedWithoutErrorCount = Get-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey
 
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
+}
+
+If (!$retryInstallFailedWithoutErrorCount) {
+    $retryInstallFailedWithoutErrorCount = 0
 }
 
 If (!$acceptableHashes) {
@@ -502,6 +508,11 @@ If ($pendingRebootForThisUpgrade -or $rebootInitiatedForThisUpgrade) {
         # Obviously we have rebooted since this happened, but we're still not upgraded... clean up the registry so that the installation script will try again
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 0
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 0
+
+        $retryInstallFailedWithoutErrorCount += 1
+
+        # Mark this state in registry as having occurred
+        Write-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey -Value $retryInstallFailedWithoutErrorCount
 
         # And then clean up their values for this script run
         $pendingRebootForThisUpgrade = $False
