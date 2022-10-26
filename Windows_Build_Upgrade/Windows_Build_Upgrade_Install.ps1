@@ -487,6 +487,7 @@ If ($pendingRebootForThisUpgrade -or $rebootInitiatedForThisUpgrade) {
 
     # If the reg path was modified before the most recent boot and they were at least a day apart
     If ($regPathLastModified -lt $lastBootUpTime -and $daysBetweenModifiedAndBoot -gt 0) {
+        $outputLog += "It looks like there is a pending reboot for this upgrade, but it also looks like this machine has rebooted since then, so Windows installation may not finish. Clearing some registry keys so that we can try again."
         # Obviously we have rebooted since this happened, but we're still not upgraded... clean up the registry so that the installation script will try again
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 0
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 0
