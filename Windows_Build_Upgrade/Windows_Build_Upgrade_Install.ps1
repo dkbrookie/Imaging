@@ -757,8 +757,11 @@ If (($windowsGeneration -eq '11') -and ($forceInstallOnUnsupportedHardware)) {
 
     Try {
         Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassTPMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassRAMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassSecureBootCheck' -Type 'DWORD' -Value 1
     } Catch {
-        $outputLog += "There was a problem, could net set AllowUpgradesWithUnsupportedTPMOrCPU to 1. Installation will not succeed if hardware is not compatible."
+        $outputLog += "There was a problem, could net bypass Win11 compatibility checks. Installation will not succeed if hardware is not compatible."
     }
 }
 
