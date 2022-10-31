@@ -331,13 +331,19 @@ $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
+$retryInstallFailedWithoutErrorCountKey = 'RetryInstallFailedWithoutErrorCountKey'
 $acceptableHashes = $hashArrays[$targetBuild]
 
-# This ends up a string instead of an integer if we don't cast it
+# This ends up strings instead of integers if we don't cast them
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
+[Int32]$retryInstallFailedWithoutErrorCount = Get-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey
 
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
+}
+
+If (!$retryInstallFailedWithoutErrorCount) {
+    $retryInstallFailedWithoutErrorCount = 0
 }
 
 If (!$acceptableHashes) {
@@ -485,12 +491,41 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
     Return
 }
 
+$pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
+$rebootInitiatedForThisUpgrade = (Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)
+
+# If either reboot is pending for this upgrade, OR reboot has been initiated for this upgrade, check to make sure a reboot hasn't actually happened more recently
+If ($pendingRebootForThisUpgrade -or $rebootInitiatedForThisUpgrade) {
+    # If either of these is true but a reboot has occurred at least a day after this value was set, we're in a weird state where windows did fail to install
+    # but didn't throw an error and we want to reset the machine to try the upgrade again
+    $lastBootUpTime = (Get-WmiObject Win32_OperatingSystem | Select-Object @{LABEL = 'LastBootUpTime'; EXPRESSION = { $_.ConvertToDateTime($_.LastBootUpTime) } }).LastBootUpTime
+    $regPathLastModified = (Add-RegKeyLastWriteTime -Path $regPath).LastWriteTime
+    $daysBetweenModifiedAndBoot = [math]::Ceiling(($lastBootUpTime - $regPathLastModified).TotalDays)
+
+    # If the reg path was modified before the most recent boot and they were at least a day apart
+    If ($regPathLastModified -lt $lastBootUpTime -and $daysBetweenModifiedAndBoot -gt 0) {
+        $outputLog += "It looks like there is a pending reboot for this upgrade, but it also looks like this machine has rebooted since then, so Windows installation may not finish. Clearing some registry keys so that we can try again."
+        # Obviously we have rebooted since this happened, but we're still not upgraded... clean up the registry so that the installation script will try again
+        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 0
+        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 0
+
+        $retryInstallFailedWithoutErrorCount += 1
+
+        # Mark this state in registry as having occurred
+        Write-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey -Value $retryInstallFailedWithoutErrorCount
+
+        # And then clean up their values for this script run
+        $pendingRebootForThisUpgrade = $False
+        $rebootInitiatedForThisUpgrade = $False
+    }
+}
+
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
+If ($pendingRebootForThisUpgrade) {
 
     # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded so the installer must have errored out without
     # actually throwing an error code? Let's set the error state for assessment.
-    If ((Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)) {
+    If ($rebootInitiatedForThisUpgrade) {
         $failMsg = "Windows setup appears to have succeeded (it didn't throw an error) but windows didn't actually complete the upgrade for some reason. This machine needs to be manually assessed. If you want to try again, delete registry values at '$rebootInitiatedForThisUpgradeKey', '$pendingRebootForThisUpgradeKey' and '$winSetupErrorKey'"
         $outputLog = "!Failure: $failMsg" + $outputLog
         Write-RegistryValue -Name $winSetupErrorKey -Value $failMsg
@@ -721,8 +756,11 @@ If (($windowsGeneration -eq '11') -and ($forceInstallOnUnsupportedHardware)) {
 
     Try {
         Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassTPMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassRAMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassSecureBootCheck' -Type 'DWORD' -Value 1
     } Catch {
-        $outputLog += "There was a problem, could net set AllowUpgradesWithUnsupportedTPMOrCPU to 1. Installation will not succeed if hardware is not compatible."
+        $outputLog += "There was a problem, could net bypass Win11 compatibility checks. Installation will not succeed if hardware is not compatible."
     }
 }
 
