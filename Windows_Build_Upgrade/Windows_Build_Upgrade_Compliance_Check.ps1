@@ -49,6 +49,9 @@ function Get-ErrorMessage {
 # Call in Get-PendingReboot
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-PendingReboot.ps1') | Invoke-Expression
 
+# Call in Get-IsDiskFull
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
+
 # Call in Get-WindowsVersion
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsVersion.ps1') | Invoke-Expression
 
@@ -264,13 +267,26 @@ If ($pendingRebootForThisUpgrade -or ($pendingRebootForPreviousScript -and ($tar
 }
 
 <#
-########################
-# Make sure ISO exists #
-########################
+##########################################################
+################## Make sure ISO exists ##################
+# If not, ensure there is enough disk space for download #
+##########################################################
 #>
 
 # ISO may not be downloaded yet
 If (!(Test-Path -Path $isoFilePath)) {
+
+  # Microsoft guidance states that 20Gb is needed for installation and we need around 7GB for the ISO
+  $diskCheck = Get-IsDiskFull -MinGb 27
+
+  If ($diskCheck.DiskFull) {
+    $outputLog = ('!Error: ' + $diskCheck.Output), $outputLog
+    $outputObject.outputLog = $outputLog
+    $outputObject.nonComplianceReason = "At least 27GB of free space is needed to get the process started. Per Microsoft, 20GB is needed for the installation, and the ISO is around 7GB. This machine does not have 27GB available on the main OS drive."
+    Invoke-Output $outputObject
+    Return
+  }
+
   $outputLog = "!Warning: ISO doesn't exist yet.. Still waiting on that. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
@@ -293,6 +309,23 @@ If (!(Get-HashCheck -Path $isoFilePath)) {
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'The Windows installer was downloaded, but it does not appear to be the file we were expecting. It was probably either corrupted during download, or a new ISO was released that we are unaware of. This needs to be manually assessed and corrected.'
 
+  Invoke-Output $outputObject
+  Return
+}
+
+<#
+########################################
+# Ensure enough disk space for install #
+########################################
+#>
+
+# Microsoft guidance states that 20Gb is needed for installation
+$diskCheck = Get-IsDiskFull -MinGb 20
+
+If ($diskCheck.DiskFull) {
+  $outputLog = ('!Error: ' + $diskCheck.Output), $outputLog
+  $outputObject.outputLog = $outputLog
+  $outputObject.nonComplianceReason = "Per Microsoft, at least 20GB of free space is needed for the installation. This machine does not have 20GB available on the main OS drive."
   Invoke-Output $outputObject
   Return
 }

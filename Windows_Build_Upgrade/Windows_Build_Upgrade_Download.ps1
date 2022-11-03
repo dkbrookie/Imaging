@@ -315,8 +315,8 @@ function Start-FileDownload {
 
     $transfer = $Null
 
-    # Check total disk space, make sure there's at least 16GBs free. If there's not then run the disk cleanup script to see if we can get enough space.
-    $diskCheck = Get-IsDiskFull -MinGb 16
+    # Check total disk space, make sure there's at least 27GBs free.
+    $diskCheck = Get-IsDiskFull -MinGb 27
 
     If ($diskCheck.DiskFull) {
         $out += $diskCheck.Output
