@@ -140,6 +140,8 @@ $windowsBuildToVersionMap = @{
     '19043' = '21H1'
     '19044' = '21H2'
     '22000' = '21H2'
+    '19045' = '22H2'
+    '22621' = '22H2'
 }
 
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
