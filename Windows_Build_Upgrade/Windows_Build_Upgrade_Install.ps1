@@ -45,11 +45,11 @@ Try {
 # Call in Invoke-RebootIfNeeded
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Invoke-RebootIfNeeded.ps1') | Invoke-Expression
 # Call in Create-PendingReboot
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Invoke-RebootIfNeeded.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Create-PendingReboot.ps1') | Invoke-Expression
 # Call in Helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/add-maint-window-reboots/Windows_Build_Upgrade_Helpers.ps1') | Invoke-Expression
 # Call in Constants
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/add-maint-window-reboots/Windows_Build_Upgrade_Function.Get-Constants.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/Imaging/add-maint-window-reboots/Windows_Build_Upgrade_Function.Get-Constants.ps1') | Invoke-Expression
 
 <#
 ################################################
@@ -332,10 +332,7 @@ If ($exitCode -ne 0) {
 
     If (($userLogonStatus -eq 0) -and !$excludeFromReboot) {
         $outputLog = "!Warning: No user is logged in and machine has not been excluded from reboots, so rebooting now." + $outputLog
-        Invoke-Output @{
-            outputLog                = $outputLog
-            installationAttemptCount = $installationAttemptCount
-        }
+        Invoke-Output $outputObject
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
         shutdown /r /c $restartMessage
         Return
