@@ -1,18 +1,5 @@
 # Helper functions and prerequisite checks for windows build upgrade
 
-Try {
-  # Oddly, this command works to enable TLS12 on even Powershellv2 when it shows as unavailable. This also still works for Win8+
-  [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
-} Catch {
-  $outputLog += "Encountered an error while attempting to enable TLS1.2 to ensure successful file downloads. This can sometimes be due to dated Powershell. Checking Powershell version..."
-  # Generally enabling TLS1.2 fails due to dated Powershell so we're doing a check here to help troubleshoot failures later
-  $psVers = $PSVersionTable.PSVersion
-
-  If ($psVers.Major -lt 3) {
-    $outputLog += "Powershell version installed is only $psVers which has known issues with this script directly related to successful file downloads. Script will continue, but may be unsuccessful."
-  }
-}
-
 # Call in Get-OsVersionDefinitions
 $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 
@@ -298,10 +285,15 @@ Function Invoke-RebootHandler (
   [string]$windowsGeneration,
   [string]$rebootInitiatedKey
 ) {
+  $outputLog = @()
+  $outputObject = @{
+    OutputLog = $outputLog
+    ShouldCachePendingReboots = $false
+  }
+
   $restartMessage = "Restarting to complete Windows $windowsGeneration $targetVersion - $targetBuild upgrade"
   $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
   $rebootStatus = Read-PendingRebootStatus
-  # $shouldCachePendingReboots = $false
 
   if (!$rebootInitiated) {
     $rebootInitiated = 0
@@ -311,9 +303,8 @@ Function Invoke-RebootHandler (
     # Reboot has been attempted 3 times. Instead of trying again, set the counter back to 0 and tell the installation process to cache them and go ahead
     Write-RegistryValue -Name $rebootInitiatedKey -Value 0
     $outputLog += "There are reboots pending, but we have tried gracefully clear by rebooting 3 times. Will now cache the pending reboots and continue with installation and will restore them after installation."
-    $outputLog = (Install-WinBuild -CachePendingReboots $true) + $outputLog
-    Invoke-Output $outputObject
-    Return
+    $outputObject.ShouldCachePendingReboots = $true
+    Return $outputObject
   } ElseIf ($rebootStatus.HasPendingReboots) {
     # There are pending reboots
     If (!$excludeFromReboot -and $userIsLoggedOut) {
@@ -323,23 +314,22 @@ Function Invoke-RebootHandler (
       # Increment the rebootinitiated counter
       Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
       # Exit here because we're about to reboot
-      Invoke-Output $outputObject
       # TODO: Trigger the installation process in a scheduled task.
-      Return
+      Return $outputObject
     } ElseIf ($excludeFromReboot) {
       # Machine is excluded from automatic reboots
       $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($rebootStatus.Output)" + $outputLog
-      Invoke-Output $outputObject
-      Return
+      Return $outputObject
     } ElseIf (!$userIsLoggedOut) {
       # User is currently logged in
       $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($rebootStatus.Output)" + $outputLog
-      Invoke-Output $outputObject
-      Return
+      Return $outputObject
     }
   } Else {
     # No pending reboots!
     $outputLog += "Verified there is no reboot pending"
     Write-RegistryValue -Name $rebootInitiatedKey -Value 0
   }
+
+  Return $outputObject
 }
