@@ -730,10 +730,15 @@ If ($exitCode -ne 0) {
 
     If ($convertedExitCode -eq 'c1900200') {
         $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'. You may be able to force installation by setting `$forceInstallOnUnsupportedHardware to `$true."
-        $setupErr = 'Hardware configuration unsupported.'
+        $setupErr = 'Hardware configuration unsupported'
     }
 
-    If ($setupErr -eq '') {
+    If ($convertedExitCode -eq 'c1900204') {
+        $outputLog += "Cannot install because Windows has stated 'selected install choice is not available' which may mean that this copy of windows is not licensed."
+        $setupErr = 'Selected install choice is not available'
+    }
+
+    If (('' -eq $setupErr) -or ($Null -eq $setupErr)) {
         $setupErr = 'Unknown Error - Windows Setup did not return an error message. Check the Exit Code.'
     }
 
