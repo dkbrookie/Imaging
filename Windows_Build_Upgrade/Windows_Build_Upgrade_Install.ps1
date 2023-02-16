@@ -252,8 +252,6 @@ If ($targetBuild) {
     }
 }
 
-$restartMessage = "Restarting to complete Windows $windowsGeneration $targetVersion - $targetBuild upgrade"
-
 <#
 ########################
 ## Environment Checks ##
@@ -293,9 +291,6 @@ If ($isEnterprise -and !$enterpriseIsoUrl) {
     Return
 }
 
-# Is there a pending reboot flag from a previous version of this script?
-$pendingRebootPreviousVersion = Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade'
-
 <#
 ########################
 ## Define File Hashes ##
@@ -332,9 +327,6 @@ $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
 $rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
-$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
-$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
