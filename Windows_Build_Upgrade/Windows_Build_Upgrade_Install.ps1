@@ -46,6 +46,11 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
+# TODO: Switch to master URLs after merge
+# Call in Read-PendingRebootStatus
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Read-PendingRebootStatus.ps1') | Invoke-Expression
+# Call in Cache-AndRestorePendingReboots
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Cache-AndRestorePendingReboots.ps1') | Invoke-Expression
 
 <#
 ####################
@@ -388,51 +393,6 @@ function Get-HashCheck {
     Return $hashMatches.length -gt 0
 }
 
-function Read-PendingRebootStatus {
-    $out = @()
-    $rebootChecks = @()
-
-     ## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
-    ## for an application to make an entry here too.
-    $rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
-    $rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
-
-    ## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
-    ## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
-    ## aren't running so they can be renamed.
-    $rbCheck3 = Test-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations
-
-    # There may be a pending reboot for 20H2 and if target is 19042 (which are the same) that's applicable here too
-    $rbCheck4 = (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -and ($targetBuild -eq '19042')
-
-    If ($rbCheck1) {
-        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
-        $rebootChecks += $rbCheck1
-    }
-
-    If ($rbCheck2) {
-        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
-        $rebootChecks += $rbCheck2
-    }
-
-    If ($rbCheck3) {
-        $out += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
-        $out += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
-        $out = ($rbCheck3).PendingFileRenameOperations | Out-String
-        $rebootChecks += $rbCheck3
-    }
-
-    If ($rbCheck4) {
-        $out += "Found a pending reboot for Win10 20H2."
-        $rebootChecks += $rbCheck4
-    }
-
-    Return @{
-        Checks = $rebootChecks
-        Output = ($out -join "`n")
-    }
-}
-
 <#
 ######################
 ## Check OS Version ##
@@ -493,35 +453,7 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
     Return
 }
 
-$pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
-$rebootInitiatedForThisUpgrade = (Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)
-
-# If either reboot is pending for this upgrade, OR reboot has been initiated for this upgrade, check to make sure a reboot hasn't actually happened more recently
-If ($pendingRebootForThisUpgrade -or $rebootInitiatedForThisUpgrade) {
-    # If either of these is true but a reboot has occurred at least a day after this value was set, we're in a weird state where windows did fail to install
-    # but didn't throw an error and we want to reset the machine to try the upgrade again
-    $lastBootUpTime = (Get-WmiObject Win32_OperatingSystem | Select-Object @{LABEL = 'LastBootUpTime'; EXPRESSION = { $_.ConvertToDateTime($_.LastBootUpTime) } }).LastBootUpTime
-    $regPathLastModified = (Add-RegKeyLastWriteTime -Path $regPath).LastWriteTime
-    $daysBetweenModifiedAndBoot = [math]::Ceiling(($lastBootUpTime - $regPathLastModified).TotalDays)
-
-    # If the reg path was modified before the most recent boot and they were at least a day apart
-    If ($regPathLastModified -lt $lastBootUpTime -and $daysBetweenModifiedAndBoot -gt 0) {
-        $outputLog += "It looks like there is a pending reboot for this upgrade, but it also looks like this machine has rebooted since then, so Windows installation may not finish. Clearing some registry keys so that we can try again."
-        # Obviously we have rebooted since this happened, but we're still not upgraded... clean up the registry so that the installation script will try again
-        Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 0
-        Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 0
-
-        $retryInstallFailedWithoutErrorCount += 1
-
-        # Mark this state in registry as having occurred
-        Write-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey -Value $retryInstallFailedWithoutErrorCount
-
-        # And then clean up their values for this script run
-        $pendingRebootForThisUpgrade = $False
-        $rebootInitiatedForThisUpgrade = $False
-    }
-}
-
+# TODO: Get rid of concept of "pendingrebootforthisupgrade" controlling reboots, use Create-PendingReboot for that, only use "pendingrebootforthisupgrade" to report that the upgrade has occurred
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
 If ($pendingRebootForThisUpgrade) {
 
@@ -544,7 +476,13 @@ If ($pendingRebootForThisUpgrade) {
             installationAttemptCount = $installationAttemptCount
         }
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        shutdown /r /c $restartMessage
+
+        # Mark a pending reboot manually to ensure that Invoke-RebootIfNeeded finds a reboot
+        Create-PendingReboot
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
+
         Return
     } Else {
         If ($excludeFromReboot) {
@@ -649,45 +587,24 @@ If (!(Test-Path -Path $LTSvc)) {
 $pendingRebootCheck = Read-PendingRebootStatus
 
 # If there is a pending reboot flag present on the system
-If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
+If ($pendingRebootCheck.HasPendingReboots -and !$excludeFromReboot) {
     $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
     $outputLog += $pendingRebootCheck.Output
 
     # When the machine is force rebooted, this registry value is set to 1, if it's equal to or greater than 1, we know the machine has been rebooted
     If ($rebootInitiated -and ($rebootInitiated -ge 1)) {
-        $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
+        $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Caching reboot pending registry keys and they will be put back after the next reboot."
         # If the machine still has reboot flags, just delete the flags because it is likely that Windows failed to remove them
-        Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
-        Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
-        Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
-
-        $outputLog += "Reboot registry key deletes completed. Checking one last time to ensure that deleting them worked."
-
-        # Check again for pending reboots
-        $pendingRebootCheck = Read-PendingRebootStatus
-        # If there are still pending reboots at this point, increment the counter so we know how many retries have occurred without another forced reboot
-        If ($pendingRebootCheck.Checks.Length) {
-            $outputLog += "Was not able to remove some of the reboot flags. Exiting script. The flags still remaining are: $($pendingRebootCheck.Output)"
-
-            # If the attempted deletion has occurred 3 or more times, deleting the flags is not working... We should probably try a real reboot again, so set value to 0
-            If ($rebootInitiated -ge 3) {
-                $outputLog += "This has been attempted $rebootInitiated times. Setting the counter back to 0 so that on next script run, a reboot will be attempted again."
-                Write-RegistryValue -Name $rebootInitiatedKey -Value 0
-            } Else {
-                # Increment counter
-                Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
-            }
-
-            $outputLog = "!Warning: Still pending reboots." + $outputLog
-
-            Invoke-Output @{
+        # TODO: cache pending reboots
+        Try {
+            Cache-AndRestorePendingReboots
+        } Catch {
+            $outputLog += "Could not cache pending reboots. The error was: $($_.Exception.Message)"
+            Invoke-Output {
                 outputLog = $outputLog
                 installationAttemptCount = $installationAttemptCount
             }
             Return
-        } Else {
-            Write-RegistryValue -Name $rebootInitiatedKey -Value 0
-            $outputLog += "Reboot flags are now clear. Continuing."
         }
     } ElseIf ($userIsLoggedOut) {
         # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
@@ -698,7 +615,9 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
-        shutdown /r /c $restartMessage
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
         Return
     } Else {
         $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later." + $outputLog
@@ -708,7 +627,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         }
         Return
     }
-} ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
+} ElseIf ($pendingRebootCheck.HasPendingReboots -and $excludeFromReboot) {
     $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
@@ -835,8 +754,14 @@ If ($exitCode -ne 0) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
+
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        shutdown /r /c $restartMessage
+
+        # Manually mark a pending reboot to ensure that Invoke-RebootIfNeeded finds a pending reboot and triggers reboot
+        Create-PendingReboot
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
         Return
     } ElseIf ($excludeFromReboot) {
         $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry." + $outputLog
@@ -844,6 +769,8 @@ If ($exitCode -ne 0) {
     } Else {
         $outputLog = "!Warning: User is logged in after setup completed successfully, so marking pending reboot in registry." + $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
+        # Manually mark pending reboot just in case Windows installer didn't do a great job
+        Create-PendingReboot
     }
 }
 
