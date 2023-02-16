@@ -42,6 +42,8 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+# Call in Get-IsDiskFull
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
 
@@ -589,6 +591,24 @@ If (!(Get-HashCheck -Path $isoFilePath)) {
     $outputLog = "!Error: The hash doesn't match!! This ISO file needs to be deleted via the cleanup script and redownloaded via the download script, OR a new hash needs to be added to this script!!" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
+        installationAttemptCount = $installationAttemptCount
+    }
+    Return
+}
+
+<#
+############################
+# Ensure enough disk space #
+############################
+#>
+
+# Microsoft guidance states that 20Gb is needed for installation
+$diskCheck = Get-IsDiskFull -MinGb 20
+
+If ($diskCheck.DiskFull) {
+    $outputLog = ('!Error: ' + $diskCheck.Output) + $outputLog
+    Invoke-Output @{
+        outputLog                = $outputLog
         installationAttemptCount = $installationAttemptCount
     }
     Return
