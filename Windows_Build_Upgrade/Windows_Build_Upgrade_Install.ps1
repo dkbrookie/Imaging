@@ -255,8 +255,6 @@ If ($targetBuild) {
     }
 }
 
-$restartMessage = "Restarting to complete Windows $windowsGeneration $targetVersion - $targetBuild upgrade"
-
 <#
 ########################
 ## Environment Checks ##
@@ -310,9 +308,6 @@ $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
 $rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
-$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
-$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
