@@ -41,9 +41,8 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/add-22621-to-windowsversioncomparison/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
-# TODO: Switch this to master URL after merge
 # Call in Get-WindowsIsoUrlByBuild.ps1
-$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/add-iso-urls/Get-WindowsIsoUrlByBuild.ps1') | Invoke-Expression
+$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-WindowsIsoUrlByBuild.ps1') | Invoke-Expression
 # Call in Get-IsDiskFull
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
