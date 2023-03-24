@@ -72,18 +72,6 @@ If (!$Is64) {
   Return
 }
 
-# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
-Try {
-  $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
-  $outputLog += Get-ErrorMessage $_ "There was an error in determining whether this is an Enterprise version of windows or not."
-  $outputObject.outputLog = $outputLog
-  $outputObject.nonComplianceReason = "Could not determine if this is an Enterprise Windows version or not. There may be an issue with Powershell or WMI."
-
-  Invoke-Output $outputObject
-  Return
-}
-
 # Determine target via release channel
 Try {
   $targetBuild = (Get-OsVersionDefinitions).Windows.Desktop[$releaseChannel]
@@ -97,35 +85,27 @@ Try {
   Return
 }
 
-If ($isEnterprise) {
-  $hashArrays = @{
-    '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
-    '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
-    '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
-    '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
-  }
-}
-Else {
-  $hashArrays = @{
-    '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
-    '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
-    '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
-    '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F', '4BC6C7E7C61AF4B5D1B086C5D279947357CFF45C2F82021BB58628C2503EB64E')
-  }
+# We need the ISO url because it contains the expected hash
+try {
+  $isoUrl = Get-WindowsIsoUrlByBuild -Build $targetBuild
+} catch {
+  $outputLog = (Get-ErrorMessage $_ "!Error: Could not get url for '$targetBuild'") + $outputLog
+  Invoke-Output $outputLog
+  Return
 }
 
-Try {
-  $acceptableHashes = $hashArrays[$targetBuild]
-} Catch {
-  $outputLog = "`$targetBuild of '$targetBuild' is not compatible with array of ISO hashes defined in script. Please check script."
+# Suss out the expected hash from the isos URL
+$acceptableHash = (($isoUrl -split '_')[1] -split '\.')[0]
+If (!$acceptableHash) {
+  $outputLog = (Get-ErrorMessage $_ "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!") + $outputLog
+  Invoke-Output $outputLog
+  Return
 }
-
 
 function Get-HashCheck {
   param ([string]$Path)
   $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
-  $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
-  Return $hashMatches.length -gt 0
+  Return $acceptableHash -eq $hash
 }
 
 <#
