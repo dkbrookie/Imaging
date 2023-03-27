@@ -233,10 +233,10 @@ If ($rebootInitiatedForThisUpgrade) {
 
 # Are we pending reboot?
 $pendingRebootForThisUpgrade = (Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)
-$pendingRebootForPreviousScript = (Test-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -and ((Get-RegistryValue -Path $previousRegPath -Name 'PendingRebootForThisUpgrade') -eq 1)
+$pendingReboot = (Read-PendingRebootStatus).HasPendingReboots
 
 # If pending reboot for this upgrade, OR pending reboot for 20H2 and target is 19042 (which are the same)
-If ($pendingRebootForThisUpgrade -or ($pendingRebootForPreviousScript -and ($targetBuild -eq '19042'))) {
+If ($pendingRebootForThisUpgrade -or $pendingReboot) {
   $outputLog = "!Warning: This machine has already been upgraded but is pending reboot via reg value at $regPath\$pendingRebootForThisUpgradeKey. Exiting script.", $outputLog
 
   $outputObject.outputLog = $outputLog
@@ -332,12 +332,11 @@ If (!(Test-Path -Path $LTSvc)) {
   New-Item -Path $LTSvc -ItemType Directory | Out-Null
 }
 
-$pendingRebootCheck = Get-PendingReboot
-$pendingReboot = $pendingRebootCheck.PendingReboot
+$pendingReboot = Read-PendingRebootStatus
 
 # If there is a pending reboot flag present on the system
-If ($pendingReboot -and !$excludeFromReboot) {
-  $outputLog += $pendingRebootCheck.Output
+If ($pendingReboot.HasPendingReboots -and !$excludeFromReboot) {
+  $outputLog += $pendingReboot.Output
 
   $outputObject.outputLog = $outputLog
   $outputObject.nonComplianceReason = 'There are existing pending reboots on this system, so Windows setup cannot run. Either this machine needs to be rebooted, or Windows installer is experiencing an issue.'

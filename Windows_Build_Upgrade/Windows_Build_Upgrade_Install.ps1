@@ -47,6 +47,11 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
+# TODO: Switch to master URLs after merge
+# Call in Read-PendingRebootStatus
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Read-PendingRebootStatus.ps1') | Invoke-Expression
+# Call in Cache-AndRestorePendingReboots
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Cache-AndRestorePendingReboots.ps1') | Invoke-Expression
 
 <#
 ####################
@@ -250,8 +255,6 @@ If ($targetBuild) {
     }
 }
 
-$restartMessage = "Restarting to complete Windows $windowsGeneration $targetVersion - $targetBuild upgrade"
-
 <#
 ########################
 ## Environment Checks ##
@@ -262,28 +265,6 @@ $Is64 = [Environment]::Is64BitOperatingSystem
 
 If (!$Is64) {
     $outputLog = "!Error: This script only supports 64 bit operating systems! This is a 32 bit machine. Please upgrade this machine to $targetBuild manually!" + $outputLog
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
-}
-
-# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
-Try {
-    $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
-    $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
-}
-
-# Make sure a URL has been defined for the Win ISO on Enterprise versions
-If ($isEnterprise -and !$enterpriseIsoUrl) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
         installationAttemptCount = $installationAttemptCount
@@ -305,9 +286,6 @@ $regPath = "HKLM:\SOFTWARE\LabTech\Service\Windows_$($targetBuild)_Upgrade"
 $rebootInitiatedKey = "ExistingRebootInitiated"
 $rebootInitiatedForThisUpgradeKey = "RebootInitiatedForThisUpgrade"
 $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
-$windowsUpdateRebootPath1 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
-$windowsUpdateRebootPath2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
-$fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
@@ -328,7 +306,7 @@ If (!$acceptableHash) {
     Return
 }
 
-# This ends up a string instead of an integer if we don't cast it
+# This ends up strings instead of integers if we don't cast them
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
 
 If (!$installationAttemptCount) {
@@ -363,51 +341,6 @@ function Get-HashCheck {
     param ([string]$Path)
     $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
     Return $acceptableHash -eq $hash
-}
-
-function Read-PendingRebootStatus {
-    $out = @()
-    $rebootChecks = @()
-
-     ## The following two reboot keys most commonly exist if a reboot is required for Windows Updates, but it is possible
-    ## for an application to make an entry here too.
-    $rbCheck1 = Get-ChildItem $windowsUpdateRebootPath1 -EA 0
-    $rbCheck2 = Get-Item $windowsUpdateRebootPath2 -EA 0
-
-    ## This is often also the result of an update, but not specific to Windows update. File renames and/or deletes can be
-    ## pending a reboot, and this key tells Windows to take these actions on the machine after a reboot to ensure the files
-    ## aren't running so they can be renamed.
-    $rbCheck3 = Test-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations
-
-    # There may be a pending reboot for 20H2 and if target is 19042 (which are the same) that's applicable here too
-    $rbCheck4 = (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade') -and ($targetBuild -eq '19042')
-
-    If ($rbCheck1) {
-        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath1.`r`n"
-        $rebootChecks += $rbCheck1
-    }
-
-    If ($rbCheck2) {
-        $out += "Found a reboot pending for Windows Updates to complete at $windowsUpdateRebootPath2.`r`n"
-        $rebootChecks += $rbCheck2
-    }
-
-    If ($rbCheck3) {
-        $out += "Found a reboot pending for file renames/deletes on next system reboot.`r`n"
-        $out += "`r`n`r`n===========List of files pending rename===========`r`n`r`n`r`n"
-        $out = ($rbCheck3).PendingFileRenameOperations | Out-String
-        $rebootChecks += $rbCheck3
-    }
-
-    If ($rbCheck4) {
-        $out += "Found a pending reboot for Win10 20H2."
-        $rebootChecks += $rbCheck4
-    }
-
-    Return @{
-        Checks = $rebootChecks
-        Output = ($out -join "`n")
-    }
 }
 
 <#
@@ -471,11 +404,10 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
 }
 
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
-If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-RegistryValue -Name $pendingRebootForThisUpgradeKey) -eq 1)) {
-
+If ($pendingRebootForThisUpgrade) {
     # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded so the installer must have errored out without
     # actually throwing an error code? Let's set the error state for assessment.
-    If ((Test-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -and ((Get-RegistryValue -Name $rebootInitiatedForThisUpgradeKey) -eq 1)) {
+    If ($rebootInitiatedForThisUpgrade) {
         $failMsg = "Windows setup appears to have succeeded (it didn't throw an error) but windows didn't actually complete the upgrade for some reason. This machine needs to be manually assessed. If you want to try again, delete registry values at '$rebootInitiatedForThisUpgradeKey', '$pendingRebootForThisUpgradeKey' and '$winSetupErrorKey'"
         $outputLog = "!Failure: $failMsg" + $outputLog
         Write-RegistryValue -Name $winSetupErrorKey -Value $failMsg
@@ -492,7 +424,13 @@ If ((Test-RegistryValue -Name $pendingRebootForThisUpgradeKey) -and ((Get-Regist
             installationAttemptCount = $installationAttemptCount
         }
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        shutdown /r /c $restartMessage
+
+        # Mark a pending reboot manually to ensure that Invoke-RebootIfNeeded finds a reboot
+        Create-PendingReboot
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
+
         Return
     } Else {
         If ($excludeFromReboot) {
@@ -597,45 +535,23 @@ If (!(Test-Path -Path $LTSvc)) {
 $pendingRebootCheck = Read-PendingRebootStatus
 
 # If there is a pending reboot flag present on the system
-If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
+If ($pendingRebootCheck.HasPendingReboots -and !$excludeFromReboot) {
     $rebootInitiated = Get-RegistryValue -Name $rebootInitiatedKey
     $outputLog += $pendingRebootCheck.Output
 
     # When the machine is force rebooted, this registry value is set to 1, if it's equal to or greater than 1, we know the machine has been rebooted
     If ($rebootInitiated -and ($rebootInitiated -ge 1)) {
-        $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Manually deleting reboot pending registry keys..."
+        $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Caching reboot pending registry keys and they will be put back after the next reboot."
         # If the machine still has reboot flags, just delete the flags because it is likely that Windows failed to remove them
-        Remove-Item $windowsUpdateRebootPath1 -Force -ErrorAction Ignore
-        Remove-Item $windowsUpdateRebootPath2 -Force -ErrorAction Ignore
-        Remove-ItemProperty -Path $fileRenamePath -Name PendingFileRenameOperations -Force -ErrorAction Ignore
-
-        $outputLog += "Reboot registry key deletes completed. Checking one last time to ensure that deleting them worked."
-
-        # Check again for pending reboots
-        $pendingRebootCheck = Read-PendingRebootStatus
-        # If there are still pending reboots at this point, increment the counter so we know how many retries have occurred without another forced reboot
-        If ($pendingRebootCheck.Checks.Length) {
-            $outputLog += "Was not able to remove some of the reboot flags. Exiting script. The flags still remaining are: $($pendingRebootCheck.Output)"
-
-            # If the attempted deletion has occurred 3 or more times, deleting the flags is not working... We should probably try a real reboot again, so set value to 0
-            If ($rebootInitiated -ge 3) {
-                $outputLog += "This has been attempted $rebootInitiated times. Setting the counter back to 0 so that on next script run, a reboot will be attempted again."
-                Write-RegistryValue -Name $rebootInitiatedKey -Value 0
-            } Else {
-                # Increment counter
-                Write-RegistryValue -Name $rebootInitiatedKey -Value ($rebootInitiated + 1)
-            }
-
-            $outputLog = "!Warning: Still pending reboots." + $outputLog
-
-            Invoke-Output @{
+        Try {
+            Cache-AndRestorePendingReboots
+        } Catch {
+            $outputLog += "Could not cache pending reboots. The error was: $($_.Exception.Message)"
+            Invoke-Output {
                 outputLog = $outputLog
                 installationAttemptCount = $installationAttemptCount
             }
             Return
-        } Else {
-            Write-RegistryValue -Name $rebootInitiatedKey -Value 0
-            $outputLog += "Reboot flags are now clear. Continuing."
         }
     } ElseIf ($userIsLoggedOut) {
         # Machine needs to be rebooted and there is no user logged in, go ahead and force a reboot now
@@ -646,7 +562,9 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
-        shutdown /r /c $restartMessage
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
         Return
     } Else {
         $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but a user is currently logged in. Will try again later." + $outputLog
@@ -656,7 +574,7 @@ If ($pendingRebootCheck.Checks.Length -and !$excludeFromReboot) {
         }
         Return
     }
-} ElseIf ($pendingRebootCheck.Checks.Length -and $excludeFromReboot) {
+} ElseIf ($pendingRebootCheck.HasPendingReboots -and $excludeFromReboot) {
     $outputLog = "!Warning: This machine has a pending reboot and needs to be rebooted before starting the $targetBuild installation, but it has been excluded from patching reboots. Will try again later. The reboot flags are: $($pendingRebootCheck.Output)" + $outputLog
     Invoke-Output @{
         outputLog = $outputLog
@@ -724,8 +642,11 @@ If (($windowsGeneration -eq '11') -and ($forceInstallOnUnsupportedHardware)) {
 
     Try {
         Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\MoSetup' -Name 'AllowUpgradesWithUnsupportedTPMOrCPU' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassTPMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassRAMCheck' -Type 'DWORD' -Value 1
+        Write-RegistryValue -Path 'HKLM:\SYSTEM\Setup\LabConfig' -Name 'BypassSecureBootCheck' -Type 'DWORD' -Value 1
     } Catch {
-        $outputLog += "There was a problem, could net set AllowUpgradesWithUnsupportedTPMOrCPU to 1. Installation will not succeed if hardware is not compatible."
+        $outputLog += "There was a problem, could net bypass Win11 compatibility checks. Installation will not succeed if hardware is not compatible."
     }
 }
 
@@ -756,10 +677,15 @@ If ($exitCode -ne 0) {
 
     If ($convertedExitCode -eq 'c1900200') {
         $outputLog += "Cannot install because this machine's hardware configuration does not meet the minimum requirements for the target Operating System 'Windows $windowsGeneration $targetBuild'. You may be able to force installation by setting `$forceInstallOnUnsupportedHardware to `$true."
-        $setupErr = 'Hardware configuration unsupported.'
+        $setupErr = 'Hardware configuration unsupported'
     }
 
-    If ($setupErr -eq '') {
+    If ($convertedExitCode -eq 'c1900204') {
+        $outputLog += "Cannot install because Windows has stated 'selected install choice is not available' which may mean that this copy of windows is not licensed."
+        $setupErr = 'Selected install choice is not available'
+    }
+
+    If (('' -eq $setupErr) -or ($Null -eq $setupErr)) {
         $setupErr = 'Unknown Error - Windows Setup did not return an error message. Check the Exit Code.'
     }
 
@@ -780,8 +706,14 @@ If ($exitCode -ne 0) {
             outputLog = $outputLog
             installationAttemptCount = $installationAttemptCount
         }
+
         Write-RegistryValue -Name $rebootInitiatedForThisUpgradeKey -Value 1
-        shutdown /r /c $restartMessage
+
+        # Manually mark a pending reboot to ensure that Invoke-RebootIfNeeded finds a pending reboot and triggers reboot
+        Create-PendingReboot
+
+        # Trigger reboot
+        Invoke-RebootIfNeeded
         Return
     } ElseIf ($excludeFromReboot) {
         $outputLog = "!Warning: This machine has been excluded from patching reboots so not rebooting. Marking pending reboot in registry." + $outputLog
@@ -789,6 +721,8 @@ If ($exitCode -ne 0) {
     } Else {
         $outputLog = "!Warning: User is logged in after setup completed successfully, so marking pending reboot in registry." + $outputLog
         Write-RegistryValue -Name $pendingRebootForThisUpgradeKey -Value 1
+        # Manually mark pending reboot just in case Windows installer didn't do a great job
+        Create-PendingReboot
     }
 }
 
