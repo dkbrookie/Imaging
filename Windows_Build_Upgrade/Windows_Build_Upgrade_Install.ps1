@@ -40,7 +40,7 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 # Call in Registry-Helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/add-22621-to-windowsversioncomparison/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
 # Call in Get-WindowsIsoUrlByBuild.ps1
 $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-WindowsIsoUrlByBuild.ps1') | Invoke-Expression
 # Call in Get-IsDiskFull
