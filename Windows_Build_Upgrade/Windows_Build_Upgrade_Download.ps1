@@ -39,8 +39,8 @@ Try {
 $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-OsVersionDefinitions.ps1') | Invoke-Expression
 # Call in Registry-Helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
-# Call in Get-WindowsIsoUrl
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-WindowsIsoUrl.ps1') | Invoke-Expression
+# Call in Get-WindowsIsoUrlByBuild.ps1
+$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-WindowsIsoUrlByBuild.ps1') | Invoke-Expression
 # Call in Get-IsDiskFull
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
@@ -139,7 +139,9 @@ $windowsBuildToVersionMap = @{
     '19042' = '20H2'
     '19043' = '21H1'
     '19044' = '21H2'
+    '19045' = '22H2'
     '22000' = '21H2'
+    '22621' = '22H2'
 }
 
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
@@ -209,22 +211,6 @@ If (!$Is64) {
     Return
 }
 
-# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
-Try {
-    $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
-    $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output $outputLog
-    Return
-}
-
-# Make sure a URL has been defined for the Win ISO on Enterprise versions
-If ($isEnterprise -and !$enterpriseIsoUrl) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
-    Invoke-Output $outputLog
-    Return
-}
-
 <#
 ######################
 ## Define Constants ##
@@ -241,32 +227,18 @@ $winSetupErrorKey = 'WindowsSetupError'
 $downloadErrorKey = 'BitsTransferError'
 $jobIdKey = "JobId"
 
-<#
-########################
-## Define File Hashes ##
-########################
-#>
-
-If ($isEnterprise) {
-    $hashArrays = @{
-        '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
-        '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
-        '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
-        '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
-    }
-} Else {
-    $hashArrays = @{
-        '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
-        '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
-        '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
-        '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F', '4BC6C7E7C61AF4B5D1B086C5D279947357CFF45C2F82021BB58628C2503EB64E')
-    }
+Try {
+    $isoUrl = Get-WindowsIsoUrlByBuild -Build $targetBuild
+} Catch {
+    $outputLog = (Get-ErrorMessage $_ "!Error: Could not get url for '$targetBuild'") + $outputLog
+    Invoke-Output $outputLog
+    Return
 }
 
-$acceptableHashes = $hashArrays[$targetBuild]
-
-If (!$acceptableHashes) {
-    $outputLog = "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
+# Suss out the expected hash from the isos URL
+$acceptableHash = (($isoUrl -split '_')[1] -split '\.')[0]
+If (!$acceptableHash) {
+    $outputLog = (Get-ErrorMessage $_ "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!") + $outputLog
     Invoke-Output $outputLog
     Return
 }
@@ -298,21 +270,11 @@ If (!(Test-Path $downloadDir)) {
 function Get-HashCheck {
     param ([string]$Path)
     $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
-    $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
-    Return $hashMatches.length -gt 0
+    Return $acceptableHash -eq $hash
 }
 
 function Start-FileDownload {
     $out += @()
-
-    # Get URL
-    If ($isEnterprise) {
-        $downloadUrl = "$enterpriseIsoUrl/Win_Ent_$targetBuild.iso"
-    } Else {
-        $fido = Get-WindowsIsoUrl -Rel $targetVersion -Win $windowsGeneration
-        $downloadUrl = $fido.Link
-    }
-
     $transfer = $Null
 
     # Check total disk space, make sure there's at least 27GBs free.
@@ -324,7 +286,7 @@ function Start-FileDownload {
     }
 
     Try {
-        $transfer = Start-BitsTransfer -Source $downloadUrl -Destination $isoFilePath -TransferPolicy Standard -Asynchronous
+        $transfer = Start-BitsTransfer -Source $isoUrl -Destination $isoFilePath -TransferPolicy Standard -Asynchronous
     } Catch {
         $out += Get-ErrorMessage $_ "!Error: Could not start the transfer!"
         Return @{
@@ -490,7 +452,7 @@ If ($jobIdExists -and !(Test-Path -Path $isoFilePath -PathType Leaf)) {
 
                     If (!(Get-HashCheck -Path $isoFilePath)) {
                         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-                        $outputLog = "!Error: The hash doesn't match!! You will need to collect the hash manually and add it to the script. The ISO's hash is -> $hash" + $outputLog
+                        $outputLog = "!Error: The hash doesn't match!! The ISO's hash is -> $hash" + $outputLog
                     } Else {
                         $outputLog = "!Success: The hash matches! The file is all good! Removing cached JobId from registry, changing LastWriteTime to NOW (so that disk cleanup doesn't delete it), and exiting Script!" + $outputLog
                         Remove-RegistryValue -Name $jobIdKey
@@ -615,7 +577,7 @@ If (!(Test-Path -Path $isoFilePath -PathType Leaf)) {
 
     If (!(Get-HashCheck -Path $isoFilePath)) {
         $hash = (Get-FileHash -Path $isoFilePath -Algorithm 'SHA256').Hash
-        $outputLog = "!Error: The hash doesn't match!! You will need to check this out manually or verify the hash manually and add a new hash to the script. The ISO's hash is -> $hash" + $outputLog
+        $outputLog = "!Error: The hash doesn't match!! The ISO's hash is -> $hash" + $outputLog
     } Else {
         $outputLog = "!Success: The hash matches! The file is all good! The download is complete! Exiting Script!" + $outputLog
     }

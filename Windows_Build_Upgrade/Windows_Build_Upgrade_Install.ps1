@@ -6,7 +6,6 @@ $outputLog = @()
 # TODO: (for future PR, not now) make reboot handling more robust
 # TODO: (for future PR, not now) After machine is successfully upgraded, new monitor for compliant machines to clean up registry entries and ISOs
 # TODO: (for future PR, not now) Mark reboot pending in EDF. Once reboot is pending, don't run download script anymore.
-# TODO: (NOW, when prod merge occurs) Rename EDF for 21H2 installationAttemptCount to "current build" and delete the others
 # TODO: (for future PR, not now) create ticket or take some other action when error state is unknown and won't retry
 
 <#
@@ -41,7 +40,9 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 # Call in Registry-Helpers
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Registry-Helpers.ps1') | Invoke-Expression
 # Call in Get-DesktopWindowsVersionComparison
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/add-22621-to-windowsversioncomparison/Function.Get-DesktopWindowsVersionComparison.ps1') | Invoke-Expression
+# Call in Get-WindowsIsoUrlByBuild.ps1
+$WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants/main/Get-WindowsIsoUrlByBuild.ps1') | Invoke-Expression
 # Call in Get-IsDiskFull
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
@@ -179,7 +180,9 @@ $windowsBuildToVersionMap = @{
     '19042' = '20H2'
     '19043' = '21H1'
     '19044' = '21H2'
+    '19045' = '22H2'
     '22000' = '21H2'
+    '22621' = '22H2'
 }
 
 # We only care about gathering the build ID based on release channel when $releaseChannel is specified, if it's not, targetVersion or targetBuild are specified
@@ -288,31 +291,6 @@ If ($isEnterprise -and !$enterpriseIsoUrl) {
     Return
 }
 
-# Is there a pending reboot flag from a previous version of this script?
-$pendingRebootPreviousVersion = Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade' -Name 'PendingRebootForThisUpgrade'
-
-<#
-########################
-## Define File Hashes ##
-########################
-#>
-
-If ($isEnterprise) {
-    $hashArrays = @{
-        '19042' = @('3152C390BFBA3E31D383A61776CFB7050F4E1D635AAEA75DD41609D8D2F67E92')
-        '19043' = @('0FC1B94FA41FD15A32488F1360E347E49934AD731B495656A0A95658A74AD67F')
-        '19044' = @('1323FD1EF0CBFD4BF23FA56A6538FF69DD410AD49969983FEE3DF936A6C811C5')
-        '22000' = @('ACECC96822EBCDDB3887D45A5A5B69EEC55AE2979FBEAB38B14F5E7F10EEB488')
-    }
-} Else {
-    $hashArrays = @{
-        '19042' = @('6C6856405DBC7674EDA21BC5F7094F5A18AF5C9BACC67ED111E8F53F02E7D13D')
-        '19043' = @('6911E839448FA999B07C321FC70E7408FE122214F5C4E80A9CCC64D22D0D85EA')
-        '19044' = @('7F6538F0EB33C30F0A5CBBF2F39973D4C8DEA0D64F69BD18E406012F17A8234F')
-        '22000' = @('667BD113A4DEB717BC49251E7BDC9F09C2DB4577481DDFBCE376436BEB9D1D2F', '4BC6C7E7C61AF4B5D1B086C5D279947357CFF45C2F82021BB58628C2503EB64E')
-    }
-}
-
 <#
 ######################
 ## Define Constants ##
@@ -333,22 +311,28 @@ $fileRenamePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
-$acceptableHashes = $hashArrays[$targetBuild]
+
+Try {
+    $isoUrl = Get-WindowsIsoUrlByBuild -Build $targetBuild
+} Catch {
+    $outputLog = "!Error: Could not get url for '$targetBuild' - Error: $($_.Exception.Message)" + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
+
+# Suss the expected hash out of the URL
+$acceptableHash = (($isoUrl -split '_')[1] -split '\.')[0]
+If (!$acceptableHash) {
+    $outputLog = "!Error: There is no HASH defined for build '$targetBuild' in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
+    Invoke-Output $outputLog
+    Return
+}
 
 # This ends up a string instead of an integer if we don't cast it
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
 
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
-}
-
-If (!$acceptableHashes) {
-    $outputLog = "!ERROR: There is no HASH defined for $targetBuild in the script! Please edit the script and define an expected file hash for this build!" + $outputLog
-    Invoke-Output @{
-        outputLog                = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
 }
 
 <#
@@ -378,8 +362,7 @@ If (!(Test-Path $downloadDir)) {
 function Get-HashCheck {
     param ([string]$Path)
     $hash = (Get-FileHash -Path $Path -Algorithm 'SHA256').Hash
-    $hashMatches = $acceptableHashes | ForEach-Object { $_ -eq $hash } | Where-Object { $_ -eq $true }
-    Return $hashMatches.length -gt 0
+    Return $acceptableHash -eq $hash
 }
 
 function Read-PendingRebootStatus {
