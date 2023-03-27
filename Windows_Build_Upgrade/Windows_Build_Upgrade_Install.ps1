@@ -272,28 +272,6 @@ If (!$Is64) {
     Return
 }
 
-# This errors sometimes. If it does, we want a clear and actionable error and we do not want to continue
-Try {
-    $isEnterprise = (Get-WindowsEdition -Online).Edition -eq 'Enterprise'
-} Catch {
-    $outputLog += "There was an error in determining whether this is an Enterprise version of windows or not. The error was: $_"
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
-}
-
-# Make sure a URL has been defined for the Win ISO on Enterprise versions
-If ($isEnterprise -and !$enterpriseIsoUrl) {
-    $outputLog = "!Error: This is a Windows Enterprise machine and no ISO URL was defined to download Windows $targetBuild. This is required for Enterprise machines! Please define the `$enterpriseIsoUrl variable with a URL where the ISO can be located and then run this again! The url should only be the base url where the ISO is located, do not include the ISO name or any trailing slashes (i.e. 'https://someurl.com'). The filename  of the ISO located here must be named 'Win_Ent_`$targetBuild.iso' like 'Win_Ent_19044.iso'" + $outputLog
-    Invoke-Output @{
-        outputLog = $outputLog
-        installationAttemptCount = $installationAttemptCount
-    }
-    Return
-}
-
 <#
 ######################
 ## Define Constants ##
@@ -311,8 +289,6 @@ $pendingRebootForThisUpgradeKey = "PendingRebootForThisUpgrade"
 $winSetupErrorKey = 'WindowsSetupError'
 $winSetupExitCodeKey = 'WindowsSetupExitCode'
 $installationAttemptCountKey = 'InstallationAttemptCount'
-$retryInstallFailedWithoutErrorCountKey = 'RetryInstallFailedWithoutErrorCountKey'
-$acceptableHashes = $hashArrays[$targetBuild]
 
 Try {
     $isoUrl = Get-WindowsIsoUrlByBuild -Build $targetBuild
@@ -332,7 +308,6 @@ If (!$acceptableHash) {
 
 # This ends up strings instead of integers if we don't cast them
 [Int32]$installationAttemptCount = Get-RegistryValue -Name $installationAttemptCountKey
-[Int32]$retryInstallFailedWithoutErrorCount = Get-RegistryValue -Name $retryInstallFailedWithoutErrorCountKey
 
 If (!$installationAttemptCount) {
     $installationAttemptCount = 0
@@ -428,10 +403,8 @@ If (Test-RegistryValue -Path 'HKLM:\SOFTWARE\LabTech\Service\Win10_20H2_Upgrade'
     Return
 }
 
-# TODO: Get rid of concept of "pendingrebootforthisupgrade" controlling reboots, use Create-PendingReboot for that, only use "pendingrebootforthisupgrade" to report that the upgrade has occurred
 # Check that this upgrade hasn't already occurred, if it has, see if we can reboot
 If ($pendingRebootForThisUpgrade) {
-
     # If the reboot for this upgrade has already occurred, the installation doesn't appear to have succeeded so the installer must have errored out without
     # actually throwing an error code? Let's set the error state for assessment.
     If ($rebootInitiatedForThisUpgrade) {
@@ -570,7 +543,6 @@ If ($pendingRebootCheck.HasPendingReboots -and !$excludeFromReboot) {
     If ($rebootInitiated -and ($rebootInitiated -ge 1)) {
         $outputLog += "Verified the reboot has already been performed but Windows failed to clean out the proper registry keys. Caching reboot pending registry keys and they will be put back after the next reboot."
         # If the machine still has reboot flags, just delete the flags because it is likely that Windows failed to remove them
-        # TODO: cache pending reboots
         Try {
             Cache-AndRestorePendingReboots
         } Catch {
