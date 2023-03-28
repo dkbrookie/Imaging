@@ -47,11 +47,10 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-IsDiskFull.ps1') | Invoke-Expression
 # Call in Get-LogonStatus
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Get-LogonStatus.ps1') | Invoke-Expression
-# TODO: Switch to master URLs after merge
 # Call in Read-PendingRebootStatus
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Read-PendingRebootStatus.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Read-PendingRebootStatus.ps1') | Invoke-Expression
 # Call in Cache-AndRestorePendingReboots
-(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/Invoke-RebootIfNeeded/Function.Cache-AndRestorePendingReboots.ps1') | Invoke-Expression
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Cache-AndRestorePendingReboots.ps1') | Invoke-Expression
 
 <#
 ####################
