@@ -277,8 +277,8 @@ function Start-FileDownload {
     $out += @()
     $transfer = $Null
 
-    # Check total disk space, make sure there's at least 27GBs free.
-    $diskCheck = Get-IsDiskFull -MinGb 27
+    # Check total disk space, make sure there's at least 28GBs free.
+    $diskCheck = Get-IsDiskFull -MinGb 28
 
     If ($diskCheck.DiskFull) {
         $out += $diskCheck.Output
