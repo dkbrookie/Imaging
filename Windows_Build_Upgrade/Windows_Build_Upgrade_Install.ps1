@@ -51,6 +51,8 @@ $WebClient.DownloadString('https://raw.githubusercontent.com/dkbrookie/Constants
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Read-PendingRebootStatus.ps1') | Invoke-Expression
 # Call in Cache-AndRestorePendingReboots
 (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Cache-AndRestorePendingReboots.ps1') | Invoke-Expression
+# Call in Invoke-RebootIfNeeded
+(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/dkbrookie/PowershellFunctions/master/Function.Invoke-RebootIfNeeded.ps1') | Invoke-Expression
 
 <#
 ####################
