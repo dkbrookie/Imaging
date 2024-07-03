@@ -1,3 +1,4 @@
+param($releaseChannel)
 $outputLog = @()
 $outputObject = @{
   outputLog           = @()
