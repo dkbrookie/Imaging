@@ -1,3 +1,4 @@
+param($releaseChannel, $enterpriseIsoUrl)
 $outputLog = @()
 
 # cast $targetBuild into a string just in case it's an int
