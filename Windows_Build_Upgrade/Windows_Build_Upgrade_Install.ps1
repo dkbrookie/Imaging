@@ -1,3 +1,4 @@
+param($releasechannel, $forceInstallOnUnsupportedHardware, [int]$excludeFromReboot, $enterpriseIsoUrl)
 $outputLog = @()
 
 # cast $targetBuild into a string just in case it's an int
